@@ -44,6 +44,45 @@ The shuffled sample covered: math 2, engineering 2, physics 1, health 1, history
 
 ## Quantitative Results
 
+### N=50 Reasoning Orchestration Matrix
+
+After the initial smoke runs, the main MMLU-Pro experiment was rerun with `N=50`, shuffled with `seed=42`, covering 14 categories: economics, engineering, business, physics, other, law, health, math, history, psychology, philosophy, computer science, biology, and chemistry.
+
+This run compares single-agent and two-solver-plus-judge debate patterns:
+
+```powershell
+docker run --rm `
+  -v ${HOME}/.local/share/opencode/auth.json:/root/.local/share/opencode/auth.json:ro `
+  -v ${PWD}/results:/app/results `
+  mmlu-framework-bench `
+  --framework direct `
+  --framework langgraph --framework crewai --framework maf `
+  --framework langgraph_debate --framework crewai_debate --framework maf_debate `
+  --limit 50 --shuffle --seed 42 --resume `
+  --output results/mmlu-pro-debate50-seed42.jsonl `
+  --summary results/mmlu-pro-debate50-seed42-summary.md
+```
+
+| Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| direct | single call | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
+| LangGraph | single agent | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
+| CrewAI | single agent | 50 | 76.0% | 1 | 2 | 18.90s | 12.06s | 44.19s |
+| MAF | single agent | 50 | 80.0% | 1 | 4 | 15.31s | 7.36s | 51.65s |
+| LangGraph | debate | 50 | 68.0% | 0 | 5 | 18.84s | 14.90s | 31.82s |
+| CrewAI | debate | 50 | 54.0% | 15 | 1 | 79.70s | 31.13s | 186.75s |
+| MAF | debate | 50 | 0.0% | 50 | 0 | 181.27s | 181.09s | 182.65s |
+
+Important interpretation note: the `maf_debate` row is not a valid measurement of MAF's reasoning quality. It was executed last, after the free opencode backend had already entered a sustained timeout state during the tail of `crewai_debate`. All 50 MAF debate examples timed out at about 181 seconds. This should be reported as backend/provider exhaustion under long-running multi-call workloads, not as evidence that MAF debate is worse at reasoning.
+
+### Main Reading
+
+In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 88%, followed by direct at 82%, MAF at 80%, and CrewAI at 76%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and parse/error surfaces.
+
+The debate topology did not improve accuracy in this run. LangGraph debate fell from 88% single-agent to 68%, and CrewAI debate fell from 76% to 54% with substantial backend timeouts. The result suggests that naive two-solver-plus-judge debate is not automatically beneficial on MMLU-Pro, especially when the same model is used for all roles and the provider is latency/timeout constrained.
+
+For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
+
 Primary shuffled sample, `N=8` per runner:
 
 | Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |

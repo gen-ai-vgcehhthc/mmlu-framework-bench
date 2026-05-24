@@ -24,17 +24,36 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     all_results: list[RunResult] = []
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    completed = load_completed(output_path) if args.resume else set()
+    if not args.resume:
+        output_path.write_text("", encoding="utf-8")
+    else:
+        all_results.extend(load_existing(output_path))
+
     started = time.perf_counter()
     for framework in args.framework:
+        pending = [question for question in questions if (framework, question.id) not in completed]
+        if not pending:
+            print(f"Skipping {framework}; all requested questions already exist in {args.output}", file=sys.stderr)
+            continue
         runner_cls = RUNNERS[framework]
         model = OpencodeModel(model=args.model, timeout_s=args.timeout, pure=not args.no_pure)
         if args.prewarm:
             model.complete("Return only the letter A.")
         runner = runner_cls(model)
-        print(f"Running {framework} on {len(questions)} questions with {args.model}", file=sys.stderr)
-        all_results.extend(run_framework(framework, args.model, runner, questions, args.concurrency))
+        print(f"Running {framework} on {len(pending)} questions with {args.model}", file=sys.stderr)
+        for result in run_framework_iter(framework, args.model, runner, pending, args.concurrency):
+            append_jsonl(output_path, [result])
+            all_results.append(result)
+            completed.add((framework, result.question_id))
+            print(
+                f"{framework} {result.question_id}: predicted={result.predicted} expected={result.expected} "
+                f"correct={result.correct} elapsed={result.elapsed_s:.2f}s",
+                file=sys.stderr,
+            )
 
-    write_jsonl(Path(args.output), all_results)
     summary = summarize(all_results)
     Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
     Path(args.summary).write_text(summary, encoding="utf-8")
@@ -44,16 +63,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run_framework(framework: str, model: str, runner, questions: list[Question], concurrency: int) -> list[RunResult]:
+def run_framework_iter(framework: str, model: str, runner, questions: list[Question], concurrency: int):
     if concurrency <= 1:
-        return [run_one(framework, model, runner, question) for question in questions]
+        for question in questions:
+            yield run_one(framework, model, runner, question)
+        return
 
-    results: list[RunResult] = []
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(run_one, framework, model, runner, question) for question in questions]
         for future in as_completed(futures):
-            results.append(future.result())
-    return sorted(results, key=lambda item: item.question_id)
+            yield future.result()
 
 
 def run_one(framework: str, model: str, runner, question: Question) -> RunResult:
@@ -90,11 +109,26 @@ def run_one(framework: str, model: str, runner, question: Question) -> RunResult
         )
 
 
-def write_jsonl(path: Path, results: list[RunResult]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
+def append_jsonl(path: Path, results: list[RunResult]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
         for result in results:
             handle.write(json.dumps(result.to_json(), ensure_ascii=False) + "\n")
+
+
+def load_existing(path: Path) -> list[RunResult]:
+    if not path.exists():
+        return []
+    rows: list[RunResult] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        rows.append(RunResult(**payload))
+    return rows
+
+
+def load_completed(path: Path) -> set[tuple[str, str]]:
+    return {(row.framework, row.question_id) for row in load_existing(path)}
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -112,6 +146,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--output", default="results/run.jsonl")
     parser.add_argument("--summary", default="results/summary.md")
     parser.add_argument("--prewarm", action="store_true", help="Run one cheap model call before each framework.")
+    parser.add_argument("--resume", action="store_true", help="Append to existing output and skip completed rows.")
     parser.add_argument("--no-pure", action="store_true", help="Do not pass --pure to opencode.")
     args = parser.parse_args(argv)
     if args.framework is None:

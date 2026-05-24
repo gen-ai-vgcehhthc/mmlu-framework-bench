@@ -49,5 +49,8 @@ class SubprocessFrameworkRunner(BaseRunner):
         return str(payload["text"])
 
     def _python_for_framework(self) -> str:
-        env_name = f"BENCH_{self.name.upper()}_PYTHON"
+        family = self.name
+        if family.endswith("_debate"):
+            family = family.removesuffix("_debate")
+        env_name = f"BENCH_{family.upper()}_PYTHON"
         return os.environ.get(env_name) or sys.executable

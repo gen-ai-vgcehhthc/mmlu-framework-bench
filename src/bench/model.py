@@ -37,10 +37,18 @@ class OpencodeModel:
                 )
             except subprocess.TimeoutExpired as exc:
                 elapsed = time.perf_counter() - start
-                partial = (exc.stdout or "") + (exc.stderr or "")
+                partial = _coerce_text(exc.stdout) + _coerce_text(exc.stderr)
                 return ModelResult(text=partial, elapsed_s=elapsed, error="timeout")
 
         elapsed = time.perf_counter() - start
         text = (proc.stdout or "") + (proc.stderr or "")
         error = None if proc.returncode == 0 else f"opencode exited {proc.returncode}"
         return ModelResult(text=text, elapsed_s=elapsed, error=error)
+
+
+def _coerce_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
