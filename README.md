@@ -91,6 +91,15 @@ Useful switches:
 - `--concurrency 2` runs questions in parallel. Keep this low for free providers.
 - `--dataset TIGER-Lab/MMLU-Pro` changes the dataset source if needed.
 - `--prewarm` spends one cheap model call before each framework to keep opencode first-run migration logs out of the measured calls.
+- `--parse-retries 1` retries a question when parsing still fails after trace fallback. This reduces blank-output failures but increases model calls.
+
+Re-score an existing JSONL with the current parser and debate trace fallback:
+
+```powershell
+python -m bench.rescore results/mmlu-pro-debate50-seed42.jsonl `
+  --in-place `
+  --summary results/mmlu-pro-debate50-seed42-summary.md
+```
 
 ## Notes
 

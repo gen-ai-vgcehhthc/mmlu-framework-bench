@@ -9,7 +9,7 @@ from pathlib import Path
 
 from bench.data import load_questions
 from bench.model import OpencodeModel
-from bench.parse import clean_output, parse_answer
+from bench.parse import clean_output, parse_answer_with_trace
 from bench.prompt import build_prompt
 from bench.report import summarize
 from bench.runners import RUNNERS
@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
             model.complete("Return only the letter A.")
         runner = runner_cls(model)
         print(f"Running {framework} on {len(pending)} questions with {args.model}", file=sys.stderr)
-        for result in run_framework_iter(framework, args.model, runner, pending, args.concurrency):
+        for result in run_framework_iter(framework, args.model, runner, pending, args.concurrency, args.parse_retries):
             append_jsonl(output_path, [result])
             all_results.append(result)
             completed.add((framework, result.question_id))
@@ -63,53 +63,78 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run_framework_iter(framework: str, model: str, runner, questions: list[Question], concurrency: int):
+def run_framework_iter(
+    framework: str,
+    model: str,
+    runner,
+    questions: list[Question],
+    concurrency: int,
+    parse_retries: int,
+):
     if concurrency <= 1:
         for question in questions:
-            yield run_one(framework, model, runner, question)
+            yield run_one(framework, model, runner, question, parse_retries=parse_retries)
         return
 
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = [pool.submit(run_one, framework, model, runner, question) for question in questions]
+        futures = [
+            pool.submit(run_one, framework, model, runner, question, parse_retries)
+            for question in questions
+        ]
         for future in as_completed(futures):
             yield future.result()
 
 
-def run_one(framework: str, model: str, runner, question: Question) -> RunResult:
-    runner.last_trace = []
+def run_one(framework: str, model: str, runner, question: Question, parse_retries: int = 0) -> RunResult:
     prompt = build_prompt(question)
-    started = time.perf_counter()
-    try:
-        raw = runner.answer(prompt)
-        elapsed = time.perf_counter() - started
-        predicted = parse_answer(raw)
-        return RunResult(
-            framework=framework,
-            model=model,
-            question_id=question.id,
-            category=question.category,
-            expected=question.answer,
-            predicted=predicted,
-            correct=predicted == question.answer,
-            elapsed_s=elapsed,
-            raw_output=clean_output(raw),
-            trace=runner.last_trace or None,
-        )
-    except Exception as exc:
-        elapsed = time.perf_counter() - started
-        return RunResult(
-            framework=framework,
-            model=model,
-            question_id=question.id,
-            category=question.category,
-            expected=question.answer,
-            predicted=None,
-            correct=False,
-            elapsed_s=elapsed,
-            raw_output="",
-            error=str(exc),
-            trace=runner.last_trace or None,
-        )
+    total_elapsed = 0.0
+    last_result: RunResult | None = None
+
+    for attempt in range(parse_retries + 1):
+        runner.last_trace = []
+        started = time.perf_counter()
+        try:
+            raw = runner.answer(prompt)
+            elapsed = time.perf_counter() - started
+            total_elapsed += elapsed
+            predicted, prediction_source = parse_answer_with_trace(raw, runner.last_trace or None)
+            last_result = RunResult(
+                framework=framework,
+                model=model,
+                question_id=question.id,
+                category=question.category,
+                expected=question.answer,
+                predicted=predicted,
+                correct=predicted == question.answer,
+                elapsed_s=total_elapsed,
+                raw_output=clean_output(raw),
+                trace=runner.last_trace or None,
+                prediction_source=prediction_source,
+                attempts=attempt + 1,
+            )
+            if predicted is not None:
+                return last_result
+        except Exception as exc:
+            elapsed = time.perf_counter() - started
+            total_elapsed += elapsed
+            return RunResult(
+                framework=framework,
+                model=model,
+                question_id=question.id,
+                category=question.category,
+                expected=question.answer,
+                predicted=None,
+                correct=False,
+                elapsed_s=total_elapsed,
+                raw_output="",
+                error=str(exc),
+                trace=runner.last_trace or None,
+                attempts=attempt + 1,
+            )
+
+    if last_result is None:
+        raise RuntimeError("unreachable: run_one produced no result")
+    return last_result
 
 
 def append_jsonl(path: Path, results: list[RunResult]) -> None:
@@ -151,6 +176,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--prewarm", action="store_true", help="Run one cheap model call before each framework.")
     parser.add_argument("--resume", action="store_true", help="Append to existing output and skip completed rows.")
     parser.add_argument("--no-pure", action="store_true", help="Do not pass --pure to opencode.")
+    parser.add_argument("--parse-retries", type=int, default=0, help="Retry a question when parsing still fails after trace fallback.")
     args = parser.parse_args(argv)
     if args.framework is None:
         args.framework = ["direct", "langgraph", "crewai", "maf"]

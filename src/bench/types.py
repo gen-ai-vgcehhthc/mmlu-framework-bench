@@ -34,6 +34,8 @@ class RunResult:
     raw_output: str
     error: str | None = None
     trace: list[dict[str, Any]] | None = None
+    prediction_source: str | None = None
+    attempts: int = 1
 
     def to_json(self) -> dict[str, Any]:
         payload = {
@@ -47,7 +49,10 @@ class RunResult:
             "elapsed_s": self.elapsed_s,
             "raw_output": self.raw_output,
             "error": self.error,
+            "attempts": self.attempts,
         }
         if self.trace is not None:
             payload["trace"] = self.trace
+        if self.prediction_source is not None:
+            payload["prediction_source"] = self.prediction_source
         return payload
