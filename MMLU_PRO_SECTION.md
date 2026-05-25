@@ -23,22 +23,26 @@ Patterns:
 
 | Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| direct | single call | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
-| LangGraph | single agent | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| CrewAI | single agent | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
-| MAF | single agent | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
-| LangGraph | debate | 50 | 78.0% | 0 | 3 | 26.09s | 17.57s | 68.31s |
-| CrewAI | debate | 50 | 76.0% | 0 | 3 | 47.67s | 38.37s | 99.43s |
-| MAF | debate | 50 | 84.0% | 0 | 1 | 22.97s | 15.22s | 77.25s |
+| direct | single call | 50 | 84.0% | 0 | 0 | 10.32s | 6.18s | 27.91s |
+| LangGraph | single agent | 50 | 90.0% | 0 | 0 | 12.47s | 7.79s | 38.56s |
+| CrewAI | single agent | 50 | 80.0% | 0 | 0 | 15.94s | 12.27s | 31.07s |
+| MAF | single agent | 50 | 88.0% | 0 | 0 | 15.13s | 7.36s | 51.65s |
+| LangGraph | debate | 50 | 84.0% | 0 | 0 | 26.05s | 17.19s | 68.31s |
+| CrewAI | debate | 50 | 80.0% | 0 | 0 | 46.96s | 37.59s | 99.43s |
+| MAF | debate | 50 | 84.0% | 0 | 0 | 22.99s | 15.22s | 77.25s |
 
 ## Interpretation
 
 The single-agent results are close enough that they should not be interpreted as strong evidence that one framework improves model reasoning. The main measurable difference is orchestration overhead and output robustness.
 
-The naive debate topology did not produce a clear, framework-wide reasoning improvement. LangGraph debate underperformed LangGraph single-agent, CrewAI debate was slightly below CrewAI single-agent, and MAF debate was slightly above MAF single-agent. Among debate runners, MAF was the strongest at 84% accuracy with 1 parse failure, compared with 78% / 3 parse failures for LangGraph debate and 76% / 3 parse failures for CrewAI debate.
+The naive debate topology did not produce a clear, framework-wide reasoning improvement. LangGraph debate underperformed LangGraph single-agent, CrewAI debate matched CrewAI single-agent, and MAF debate underperformed MAF single-agent. Among debate runners, LangGraph and MAF tied at 84%, while CrewAI reached 80% with much higher latency.
 
 The takeaway is that multi-agent deliberation is not automatically beneficial for closed-book multiple-choice reasoning. To justify debate-style orchestration, the framework must show accuracy gains that offset increased model calls, latency, parse failures, and provider timeout risk.
 
 ## Trace Note
 
-All 150 debate rows include a `trace` array containing solver A, solver B, and judge outputs with per-call latency and errors. A trace-aware re-score reduced parse failures from 48 to 15 by recovering 33 answers from solver outputs when the judge was blank: 23 via solver consensus and 10 via a single parseable solver. The remaining failures are genuinely blank raw outputs or all-blank debate traces and require retry, not better parsing.
+All 150 debate rows include a `trace` array containing solver A, solver B, and judge outputs with per-call latency and errors. A trace-aware re-score recovers judge-blank rows from solver outputs when appropriate, and the remaining blank rows were retried. Final scoring used raw output for 316 rows, solver consensus fallback for 24 rows, and single-solver fallback for 10 rows.
+
+## Follow-up Topology
+
+The repo now includes a critique topology for follow-up runs: `langgraph_critique`, `crewai_critique`, and `maf_critique`. Each run uses two solvers, two cross-critiques, and a final judge. This is more expensive than naive debate, but better aligned with the hypothesis that multi-agent discussion can improve reasoning by surfacing concrete flaws rather than merely voting.

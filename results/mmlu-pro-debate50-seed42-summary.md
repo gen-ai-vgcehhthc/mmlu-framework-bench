@@ -2,13 +2,13 @@
 
 | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| crewai | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
-| crewai_debate | 50 | 76.0% | 0 | 3 | 47.67s | 38.37s | 99.43s |
-| direct | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
-| langgraph | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| langgraph_debate | 50 | 78.0% | 0 | 3 | 26.09s | 17.57s | 68.31s |
-| maf | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
-| maf_debate | 50 | 84.0% | 0 | 1 | 22.97s | 15.22s | 77.25s |
+| crewai | 50 | 80.0% | 0 | 0 | 15.94s | 12.27s | 31.07s |
+| crewai_debate | 50 | 80.0% | 0 | 0 | 46.96s | 37.59s | 99.43s |
+| direct | 50 | 84.0% | 0 | 0 | 10.32s | 6.18s | 27.91s |
+| langgraph | 50 | 90.0% | 0 | 0 | 12.47s | 7.79s | 38.56s |
+| langgraph_debate | 50 | 84.0% | 0 | 0 | 26.05s | 17.19s | 68.31s |
+| maf | 50 | 88.0% | 0 | 0 | 15.13s | 7.36s | 51.65s |
+| maf_debate | 50 | 84.0% | 0 | 0 | 22.99s | 15.22s | 77.25s |
 
 ## Framework Scorecard
 

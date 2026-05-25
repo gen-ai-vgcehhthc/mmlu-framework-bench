@@ -65,25 +65,25 @@ docker run --rm `
 
 | Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| direct | single call | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
-| LangGraph | single agent | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| CrewAI | single agent | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
-| MAF | single agent | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
-| LangGraph | debate | 50 | 78.0% | 0 | 3 | 26.09s | 17.57s | 68.31s |
-| CrewAI | debate | 50 | 76.0% | 0 | 3 | 47.67s | 38.37s | 99.43s |
-| MAF | debate | 50 | 84.0% | 0 | 1 | 22.97s | 15.22s | 77.25s |
+| direct | single call | 50 | 84.0% | 0 | 0 | 10.32s | 6.18s | 27.91s |
+| LangGraph | single agent | 50 | 90.0% | 0 | 0 | 12.47s | 7.79s | 38.56s |
+| CrewAI | single agent | 50 | 80.0% | 0 | 0 | 15.94s | 12.27s | 31.07s |
+| MAF | single agent | 50 | 88.0% | 0 | 0 | 15.13s | 7.36s | 51.65s |
+| LangGraph | debate | 50 | 84.0% | 0 | 0 | 26.05s | 17.19s | 68.31s |
+| CrewAI | debate | 50 | 80.0% | 0 | 0 | 46.96s | 37.59s | 99.43s |
+| MAF | debate | 50 | 84.0% | 0 | 0 | 22.99s | 15.22s | 77.25s |
 
-The timeout rows from the first long run were removed and rerun. The final result file now has 350 rows: 7 runners x 50 questions. All 150 debate rows include a `trace` array with solver A, solver B, and judge outputs, per-call latency, and per-call errors.
+The timeout and blank-output rows from the first long run were removed and rerun. The final result file now has 350 rows: 7 runners x 50 questions, with 0 errors and 0 parse failures. All 150 debate rows include a `trace` array with solver A, solver B, and judge outputs, per-call latency, and per-call errors.
 
-After inspecting the trace logs, the result file was re-scored with trace-aware parsing. The first scoring pass counted 48 parse failures. Of those, 33 were recoverable from debate traces: 23 by solver consensus and 10 by a single parseable solver when the other solver and judge returned blank output. The corrected scoring has 15 remaining parse failures, all from genuinely blank raw output or all-blank debate traces.
+After inspecting the trace logs, the result file was re-scored with trace-aware parsing. The final scoring used raw model output for 316 rows, solver consensus fallback for 24 rows, and single-solver fallback for 10 rows. Remaining blank rows were retried rather than inferred.
 
 ### Main Reading
 
-In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 88%, followed by direct and MAF at 82%, and CrewAI at 78%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and parse/error surfaces.
+In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 90%, followed by MAF at 88%, direct at 84%, and CrewAI at 80%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and output-control surfaces.
 
-The debate topology did not produce a clear, framework-wide reasoning gain. LangGraph debate fell from 88% single-agent to 78%, CrewAI debate fell slightly from 78% to 76%, and MAF debate rose from 82% to 84%. The only positive movement is MAF debate, but at `N=50` the margin is too small to claim that debate reliably improves reasoning.
+The debate topology did not produce a clear, framework-wide reasoning gain. LangGraph debate fell from 90% single-agent to 84%, CrewAI debate matched CrewAI single-agent at 80%, and MAF debate fell from 88% single-agent to 84%. The result does not support a claim that naive same-model debate reliably improves MMLU-Pro reasoning.
 
-The trace logs show why parse-aware evaluation matters: each debate example uses three model calls instead of one, so blank judge outputs can hide useful solver outputs. The corrected result should still be reported with the caveat that `solver_consensus` and `single_solver_fallback` are post-processing fallbacks, not native judge success.
+The trace logs show why parse-aware evaluation matters: each debate example uses three model calls instead of one, so blank judge outputs can hide useful solver outputs. The corrected result should still be reported with the caveat that `solver_consensus` and `single_solver_fallback` are post-processing fallbacks, not native judge success. A critique topology has been added for follow-up runs to test whether explicit cross-examination is more useful than naive debate.
 
 For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
 
