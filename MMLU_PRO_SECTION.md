@@ -44,6 +44,21 @@ Follow-up Groq `llama-3.1-8b-instant`, `N=200`, adaptive consensus:
 | CrewAI | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 6.96s | 6.89s | 7.65s |
 | MAF | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 2.46s | 3.16s | 3.61s |
 
+Final Groq `llama-3.1-8b-instant`, `N=200`, adaptive consensus plus critique, with provider token usage recorded:
+
+| Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | Total Tokens |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| direct | single call | 200 | 35.5% | 0 | 0 | 0.45s | 0.24s | 1.42s | 51,941 |
+| LangGraph | single agent | 200 | 35.5% | 0 | 0 | 1.97s | 1.94s | 2.37s | 51,941 |
+| CrewAI | single agent | 200 | 35.5% | 0 | 0 | 7.05s | 6.92s | 7.95s | 51,941 |
+| MAF | single agent | 200 | 35.5% | 0 | 0 | 1.37s | 1.19s | 3.29s | 51,941 |
+| LangGraph | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 2.25s | 1.84s | 3.99s | 125,571 |
+| CrewAI | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 7.14s | 7.08s | 7.88s | 125,533 |
+| MAF | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 1.62s | 1.22s | 3.43s | 125,533 |
+| LangGraph | critique | 200 | 36.0% | 0 | 0 | 4.62s | 3.07s | 12.09s | 388,678 |
+| CrewAI | critique | 200 | 36.0% | 0 | 0 | 7.64s | 7.56s | 8.36s | 388,663 |
+| MAF | critique | 200 | 36.0% | 0 | 0 | 3.00s | 2.72s | 5.93s | 388,688 |
+
 ## Interpretation
 
 The single-agent results are close enough that they should not be interpreted as strong evidence that one framework improves model reasoning. The main measurable difference is orchestration overhead and output robustness.
@@ -53,6 +68,10 @@ The naive debate topology did not produce a clear, framework-wide reasoning impr
 The takeaway is that multi-agent deliberation is not automatically beneficial for closed-book multiple-choice reasoning. To justify debate-style orchestration, the framework must show accuracy gains that offset increased model calls, latency, parse failures, and provider timeout risk.
 
 The larger Groq follow-up is more favorable to adaptive consensus but still modest: adaptive consensus improved from 35.5% to 37.5%, a +2.0 point gain or 4 additional correct answers out of 200. All three frameworks produced the same accuracy because they implement the same topology over the same model. The topology did reduce unnecessary judge calls: 189/200 questions short-circuited through solver consensus, and only 11/200 reached the judge.
+
+The critique topology was more expensive but did not improve enough to justify its cost on this model. It improved from 35.5% to 36.0%, or only 1 additional correct answer out of 200, while using about 388.7K tokens per framework versus 51.9K for direct and 125.5K for adaptive consensus. Direct-to-critique transitions show 17 direct-wrong questions fixed but 16 direct-correct questions broken, so the final judge mostly traded errors instead of resolving them. In contrast, adaptive consensus fixed 13 direct-wrong questions and broke 9 direct-correct questions, for a net +4.
+
+This supports a narrower conclusion: same-model multi-agent discussion can change answers, but stronger topology alone is not enough. Adaptive consensus is the best current tradeoff because it gains the most accuracy in this run with far fewer calls than critique. Critique needs either a stronger judge, heterogeneous models, better disagreement detection, or selective invocation only on high-uncertainty items.
 
 ## Trace Note
 

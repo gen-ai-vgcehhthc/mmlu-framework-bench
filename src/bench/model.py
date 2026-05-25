@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import threading
 import tempfile
@@ -75,8 +76,7 @@ class OpenAICompatibleModel:
     pure: bool = True
 
     def complete(self, prompt: str) -> ModelResult:
-        api_key = resolve_api_key(self.api_key_env)
-        if not api_key:
+        if not list_api_keys(self.api_key_env):
             return ModelResult(
                 text="",
                 elapsed_s=0.0,
@@ -92,20 +92,21 @@ class OpenAICompatibleModel:
         }
         body = json.dumps(payload).encode("utf-8")
         url = self.base_url.rstrip("/") + "/chat/completions"
-        req = request.Request(
-            url,
-            data=body,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "User-Agent": "mmlu-framework-bench/0.1",
-            },
-            method="POST",
-        )
 
         start = time.perf_counter()
         raw = ""
         for attempt in range(self.http_retries + 1):
+            api_key = resolve_api_key(self.api_key_env)
+            req = request.Request(
+                url,
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "mmlu-framework-bench/0.1",
+                },
+                method="POST",
+            )
             try:
                 with request.urlopen(req, timeout=self.timeout_s) as resp:
                     raw = resp.read().decode("utf-8", errors="replace")
@@ -115,7 +116,7 @@ class OpenAICompatibleModel:
                 details = exc.read().decode("utf-8", errors="replace")
                 if exc.code == 429 or 500 <= exc.code <= 599:
                     if attempt < self.http_retries:
-                        time.sleep(_retry_delay(exc, attempt))
+                        time.sleep(_retry_delay(exc, attempt, details))
                         continue
                 return ModelResult(text=details, elapsed_s=elapsed, error=f"HTTP {exc.code}")
             except Exception as exc:
@@ -262,13 +263,16 @@ def _dedupe(values: list[str]) -> list[str]:
     return deduped
 
 
-def _retry_delay(exc: error.HTTPError, attempt: int) -> float:
+def _retry_delay(exc: error.HTTPError, attempt: int, details: str = "") -> float:
     retry_after = exc.headers.get("Retry-After")
     if retry_after:
         try:
             return max(float(retry_after), 0.0)
         except ValueError:
             pass
+    match = re.search(r"try again in ([0-9.]+)s", details, flags=re.IGNORECASE)
+    if match:
+        return max(float(match.group(1)) + 0.25, 0.0)
     return min(2.0 ** attempt, 30.0)
 
 

@@ -107,6 +107,29 @@ The accuracy gain over single-call baselines was only +2.0 percentage points, or
 
 For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
 
+### N=200 Critique and Token-Usage Follow-Up
+
+The final Groq follow-up reran `N=200` with the original seven runners plus the three critique runners. This run used six Groq keys from separate accounts, rebuilt Docker after adding provider usage capture, and recorded provider-reported `prompt_tokens`, `completion_tokens`, and `total_tokens` in every JSONL row and every traced solver/critic/judge call. The final result file has 2,000 rows: 10 runners x 200 questions, with 0 errors and 0 parse failures.
+
+| Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | Total Tokens |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| direct | single call | 200 | 35.5% | 0 | 0 | 0.45s | 0.24s | 1.42s | 51,941 |
+| LangGraph | single agent | 200 | 35.5% | 0 | 0 | 1.97s | 1.94s | 2.37s | 51,941 |
+| CrewAI | single agent | 200 | 35.5% | 0 | 0 | 7.05s | 6.92s | 7.95s | 51,941 |
+| MAF | single agent | 200 | 35.5% | 0 | 0 | 1.37s | 1.19s | 3.29s | 51,941 |
+| LangGraph | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 2.25s | 1.84s | 3.99s | 125,571 |
+| CrewAI | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 7.14s | 7.08s | 7.88s | 125,533 |
+| MAF | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 1.62s | 1.22s | 3.43s | 125,533 |
+| LangGraph | critique | 200 | 36.0% | 0 | 0 | 4.62s | 3.07s | 12.09s | 388,678 |
+| CrewAI | critique | 200 | 36.0% | 0 | 0 | 7.64s | 7.56s | 8.36s | 388,663 |
+| MAF | critique | 200 | 36.0% | 0 | 0 | 3.00s | 2.72s | 5.93s | 388,688 |
+
+The full run consumed 1,750,430 provider-reported tokens. The single-call runners each used 51,941 tokens. Adaptive consensus used about 125.5K tokens per framework, with 411 model calls: 200 solver A calls, 200 solver B calls, and only 11 judge calls because 189/200 questions reached solver consensus. Critique used about 388.7K tokens per framework and 1,000 model calls: two solvers, two critics, and one judge for every question.
+
+Accuracy did not scale with cost. Adaptive consensus produced the best accuracy at 37.5%, a net +4 correct answers over direct. Critique reached only 36.0%, a net +1 over direct. Direct-to-critique transitions were nearly balanced: critique fixed 17 direct-wrong answers but broke 16 direct-correct answers. The trace logs suggest the critique/judge stage often changed answers without a reliable signal that the change was better.
+
+Operationally, the run exposed Groq TPM pressure. Two intermediate rows hit HTTP 429 before the final result: a direct row with a 530-token request and a LangGraph critique row with a 1,338-token request. The adapter was updated so 429/5xx retries rotate keys on each retry and parse Groq's "try again in Xs" message when no `Retry-After` header is present. The final critique portion was resumed at `concurrency=1`, which completed without errors.
+
 Primary shuffled sample, `N=8` per runner:
 
 | Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |

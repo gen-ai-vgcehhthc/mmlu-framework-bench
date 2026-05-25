@@ -13,6 +13,7 @@ Quantitative MMLU-Pro run:
 - Accuracy
 - Parse failures
 - Runtime latency: average, median, p95
+- Provider-reported token usage for OpenAI-compatible HTTP backends
 - Success/error rate
 - Concurrency throughput when `--concurrency` is greater than 1
 - Adaptive consensus debate and critique trace records for multi-agent runs: solver, critic, judge output, consensus short-circuits, per-call latency, and per-call errors
@@ -139,6 +140,7 @@ Useful switches:
 - `--backend openai-compatible --base-url ... --api-key-env ...` works for other compatible providers.
 - `--max-model-calls 300` aborts before a framework run if the worst-case call count could exceed the budget.
 - `--api-key-env GROQ_API_KEYS` rotates across multiple keys when the env var contains comma- or semicolon-separated keys.
+- OpenAI-compatible responses that include a `usage` object are written to JSONL rows and trace events, then summarized as prompt, completion, and total tokens.
 
 Re-score an existing JSONL with the current parser and debate trace fallback:
 
@@ -158,4 +160,4 @@ python -m bench.rescore results/mmlu-pro-debate50-seed42.jsonl `
 - `langgraph_critique`, `crewai_critique`, and `maf_critique` add a critique topology: two solvers, two cross-critiques, then one judge.
 - Multi-agent runners emit a `trace` array in JSONL results so solver, critic, and judge behavior can be inspected after the run.
 - The Docker image installs each framework in its own virtual environment because current CrewAI and MAF releases require incompatible OpenTelemetry versions.
-- Cost is marked unavailable for opencode CLI runs because the CLI output does not expose per-call token usage in a stable machine-readable format.
+- Cost is marked unavailable for opencode CLI runs because the CLI output does not expose per-call token usage in a stable machine-readable format. Groq/Grok/OpenAI-compatible HTTP runs record provider token usage when the provider returns it.
