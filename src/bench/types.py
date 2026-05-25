@@ -33,9 +33,10 @@ class RunResult:
     elapsed_s: float
     raw_output: str
     error: str | None = None
+    trace: list[dict[str, Any]] | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload = {
             "framework": self.framework,
             "model": self.model,
             "question_id": self.question_id,
@@ -47,3 +48,6 @@ class RunResult:
             "raw_output": self.raw_output,
             "error": self.error,
         }
+        if self.trace is not None:
+            payload["trace"] = self.trace
+        return payload

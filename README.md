@@ -15,6 +15,7 @@ Quantitative MMLU-Pro run:
 - Runtime latency: average, median, p95
 - Success/error rate
 - Concurrency throughput when `--concurrency` is greater than 1
+- Debate trace records for multi-agent runs: solver A, solver B, judge output, per-call latency, and per-call errors
 
 Qualitative framework scorecard:
 
@@ -98,5 +99,6 @@ Useful switches:
 - `crewai` wraps the same model call in a CrewAI Flow.
 - `maf` wraps the same model call in Microsoft Agent Framework functional workflow.
 - `langgraph_debate`, `crewai_debate`, and `maf_debate` use the same two-solver-plus-judge topology to test whether multi-agent discussion improves MMLU-Pro reasoning.
+- Debate runners emit a `trace` array in JSONL results so solver and judge behavior can be inspected after the run.
 - The Docker image installs each framework in its own virtual environment because current CrewAI and MAF releases require incompatible OpenTelemetry versions.
 - Cost is marked unavailable for opencode CLI runs because the CLI output does not expose per-call token usage in a stable machine-readable format.

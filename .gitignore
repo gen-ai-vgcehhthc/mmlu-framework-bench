@@ -6,4 +6,6 @@ __pycache__/
 results/*
 !results/mmlu-pro-*.jsonl
 !results/mmlu-pro-*-summary.md
+results/*.before-timeout-retry.jsonl
+results/*.log
 tmp/

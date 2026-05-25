@@ -76,6 +76,7 @@ def run_framework_iter(framework: str, model: str, runner, questions: list[Quest
 
 
 def run_one(framework: str, model: str, runner, question: Question) -> RunResult:
+    runner.last_trace = []
     prompt = build_prompt(question)
     started = time.perf_counter()
     try:
@@ -92,6 +93,7 @@ def run_one(framework: str, model: str, runner, question: Question) -> RunResult
             correct=predicted == question.answer,
             elapsed_s=elapsed,
             raw_output=clean_output(raw),
+            trace=runner.last_trace or None,
         )
     except Exception as exc:
         elapsed = time.perf_counter() - started
@@ -106,6 +108,7 @@ def run_one(framework: str, model: str, runner, question: Question) -> RunResult
             elapsed_s=elapsed,
             raw_output="",
             error=str(exc),
+            trace=runner.last_trace or None,
         )
 
 

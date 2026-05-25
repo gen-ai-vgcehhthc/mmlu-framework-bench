@@ -17,15 +17,15 @@ class MAFDebateRunner(BaseRunner):
 
         @step
         async def solver_a(prompt: str) -> str:
-            return await asyncio.to_thread(BaseRunner.answer, runner, solver_prompt(prompt, "Solver A"))
+            return await asyncio.to_thread(runner.traced_answer, "solver_a", solver_prompt(prompt, "Solver A"))
 
         @step
         async def solver_b(prompt: str) -> str:
-            return await asyncio.to_thread(BaseRunner.answer, runner, solver_prompt(prompt, "Solver B"))
+            return await asyncio.to_thread(runner.traced_answer, "solver_b", solver_prompt(prompt, "Solver B"))
 
         @step
         async def judge(prompt: str, answer_a: str, answer_b: str) -> str:
-            return await asyncio.to_thread(BaseRunner.answer, runner, judge_prompt(prompt, answer_a, answer_b))
+            return await asyncio.to_thread(runner.traced_answer, "judge", judge_prompt(prompt, answer_a, answer_b))
 
         @workflow
         async def solve(prompt: str) -> str:
@@ -35,6 +35,8 @@ class MAFDebateRunner(BaseRunner):
         self._workflow = solve
 
     def answer(self, prompt: str) -> str:
+        self.last_trace = []
+
         async def run() -> str:
             result = self._workflow.run(prompt)
             if hasattr(result, "__await__"):

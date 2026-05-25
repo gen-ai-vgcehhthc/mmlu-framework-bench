@@ -23,9 +23,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with contextlib.redirect_stdout(sys.stderr):
             text = runner.answer(prompt)
-        print(json.dumps({"text": text, "error": None}))
+        print(json.dumps({"text": text, "error": None, "trace": runner.last_trace}))
     except Exception as exc:
-        print(json.dumps({"text": "", "error": str(exc)}))
+        print(json.dumps({"text": "", "error": str(exc), "trace": runner.last_trace}))
         return 1
     return 0
 

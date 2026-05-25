@@ -1,6 +1,6 @@
 # MMLU-Pro Agent Framework Comparison Report
 
-Date: 2026-05-24  
+Date: 2026-05-25  
 Model backend: `opencode/deepseek-v4-flash-free` through `opencode run --pure`  
 Frameworks: LangGraph, CrewAI, Microsoft Agent Framework (MAF)  
 Dataset: `TIGER-Lab/MMLU-Pro`, `test` split
@@ -67,19 +67,21 @@ docker run --rm `
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | direct | single call | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
 | LangGraph | single agent | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| CrewAI | single agent | 50 | 76.0% | 1 | 2 | 18.90s | 12.06s | 44.19s |
-| MAF | single agent | 50 | 80.0% | 1 | 4 | 15.31s | 7.36s | 51.65s |
-| LangGraph | debate | 50 | 68.0% | 0 | 5 | 18.84s | 14.90s | 31.82s |
-| CrewAI | debate | 50 | 54.0% | 15 | 1 | 79.70s | 31.13s | 186.75s |
-| MAF | debate | 50 | 0.0% | 50 | 0 | 181.27s | 181.09s | 182.65s |
+| CrewAI | single agent | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
+| MAF | single agent | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
+| LangGraph | debate | 50 | 60.0% | 0 | 13 | 26.09s | 17.57s | 68.31s |
+| CrewAI | debate | 50 | 40.0% | 0 | 23 | 47.67s | 38.37s | 99.43s |
+| MAF | debate | 50 | 78.0% | 0 | 4 | 22.97s | 15.22s | 77.25s |
 
-Important interpretation note: the `maf_debate` row is not a valid measurement of MAF's reasoning quality. It was executed last, after the free opencode backend had already entered a sustained timeout state during the tail of `crewai_debate`. All 50 MAF debate examples timed out at about 181 seconds. This should be reported as backend/provider exhaustion under long-running multi-call workloads, not as evidence that MAF debate is worse at reasoning.
+The timeout rows from the first long run were removed and rerun. The final result file now has 350 rows: 7 runners x 50 questions. All 150 debate rows include a `trace` array with solver A, solver B, and judge outputs, per-call latency, and per-call errors.
 
 ### Main Reading
 
-In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 88%, followed by direct at 82%, MAF at 80%, and CrewAI at 76%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and parse/error surfaces.
+In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 88%, followed by direct and MAF at 82%, and CrewAI at 78%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and parse/error surfaces.
 
-The debate topology did not improve accuracy in this run. LangGraph debate fell from 88% single-agent to 68%, and CrewAI debate fell from 76% to 54% with substantial backend timeouts. The result suggests that naive two-solver-plus-judge debate is not automatically beneficial on MMLU-Pro, especially when the same model is used for all roles and the provider is latency/timeout constrained.
+The debate topology did not improve accuracy in this run. LangGraph debate fell from 88% single-agent to 60%, CrewAI debate fell from 78% to 40%, and MAF debate fell slightly from 82% to 78%. MAF was the strongest debate implementation in this harness, mostly because it preserved answer-format robustness and avoided the large judge-stage parse failure rate seen in LangGraph and CrewAI. Still, the result does not support the claim that naive two-solver-plus-judge debate makes the same model reason better on MMLU-Pro.
+
+The trace logs show why the framework debate rows can look worse than direct calls: each example uses three model calls instead of one, so blank outputs, nonconforming judge answers, and latency spikes compound. CrewAI debate in particular often had one solver answer correctly while the judge returned no parseable final answer. This should be reported as an orchestration/output-control failure mode, not simply as weaker reasoning.
 
 For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
 

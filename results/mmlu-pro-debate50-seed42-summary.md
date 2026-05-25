@@ -2,13 +2,13 @@
 
 | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| crewai | 50 | 76.0% | 1 | 2 | 18.90s | 12.06s | 44.19s |
-| crewai_debate | 50 | 54.0% | 15 | 1 | 79.70s | 31.13s | 186.75s |
+| crewai | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
+| crewai_debate | 50 | 40.0% | 0 | 23 | 47.67s | 38.37s | 99.43s |
 | direct | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
 | langgraph | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| langgraph_debate | 50 | 68.0% | 0 | 5 | 18.84s | 14.90s | 31.82s |
-| maf | 50 | 80.0% | 1 | 4 | 15.31s | 7.36s | 51.65s |
-| maf_debate | 50 | 0.0% | 50 | 0 | 181.27s | 181.09s | 182.65s |
+| langgraph_debate | 50 | 60.0% | 0 | 13 | 26.09s | 17.57s | 68.31s |
+| maf | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
+| maf_debate | 50 | 78.0% | 0 | 4 | 22.97s | 15.22s | 77.25s |
 
 ## Framework Scorecard
 

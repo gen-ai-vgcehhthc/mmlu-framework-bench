@@ -25,20 +25,20 @@ Patterns:
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | direct | single call | 50 | 82.0% | 0 | 1 | 10.24s | 6.09s | 27.91s |
 | LangGraph | single agent | 50 | 88.0% | 0 | 1 | 12.47s | 7.79s | 38.56s |
-| CrewAI | single agent | 50 | 76.0% | 1 | 2 | 18.90s | 12.06s | 44.19s |
-| MAF | single agent | 50 | 80.0% | 1 | 4 | 15.31s | 7.36s | 51.65s |
-| LangGraph | debate | 50 | 68.0% | 0 | 5 | 18.84s | 14.90s | 31.82s |
-| CrewAI | debate | 50 | 54.0% | 15 | 1 | 79.70s | 31.13s | 186.75s |
-| MAF | debate | 50 | 0.0% | 50 | 0 | 181.27s | 181.09s | 182.65s |
+| CrewAI | single agent | 50 | 78.0% | 0 | 2 | 15.88s | 12.06s | 31.07s |
+| MAF | single agent | 50 | 82.0% | 0 | 4 | 15.14s | 7.36s | 51.65s |
+| LangGraph | debate | 50 | 60.0% | 0 | 13 | 26.09s | 17.57s | 68.31s |
+| CrewAI | debate | 50 | 40.0% | 0 | 23 | 47.67s | 38.37s | 99.43s |
+| MAF | debate | 50 | 78.0% | 0 | 4 | 22.97s | 15.22s | 77.25s |
 
 ## Interpretation
 
 The single-agent results are close enough that they should not be interpreted as strong evidence that one framework improves model reasoning. The main measurable difference is orchestration overhead and output robustness.
 
-The naive debate topology did not improve MMLU-Pro accuracy. LangGraph debate underperformed LangGraph single-agent, and CrewAI debate underperformed CrewAI single-agent while introducing substantial timeout risk. MAF debate was not a valid reasoning result because it ran after the free opencode backend had entered sustained timeout behavior; all 50 examples timed out.
+The naive debate topology did not improve MMLU-Pro accuracy. LangGraph debate underperformed LangGraph single-agent, CrewAI debate underperformed CrewAI single-agent, and MAF debate was slightly below MAF single-agent. Among debate runners, MAF was the most robust: it reached 78% accuracy with only 4 parse failures, compared with 60% / 13 parse failures for LangGraph debate and 40% / 23 parse failures for CrewAI debate.
 
 The takeaway is that multi-agent deliberation is not automatically beneficial for closed-book multiple-choice reasoning. To justify debate-style orchestration, the framework must show accuracy gains that offset increased model calls, latency, parse failures, and provider timeout risk.
 
-## Reporting Note
+## Trace Note
 
-The MAF debate row should be described as backend/provider exhaustion, not as a MAF reasoning failure. A fair follow-up should rerun the debate rows in randomized order or separate fresh provider sessions, and should log model call counts and token cost.
+All 150 debate rows include a `trace` array containing solver A, solver B, and judge outputs with per-call latency and errors. The traces show that many debate failures were judge/output-control failures rather than clean reasoning mistakes: solvers often produced a valid option, but the judge returned blank or non-parseable output.

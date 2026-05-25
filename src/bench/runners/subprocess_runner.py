@@ -41,11 +41,17 @@ class SubprocessFrameworkRunner(BaseRunner):
             env=env,
             check=False,
         )
-        if proc.returncode != 0:
-            raise RuntimeError((proc.stderr or proc.stdout).strip())
-        payload = json.loads(proc.stdout)
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            if proc.returncode != 0:
+                raise RuntimeError((proc.stderr or proc.stdout).strip())
+            raise
+        self.last_trace = payload.get("trace") or []
         if payload.get("error"):
             raise RuntimeError(payload["error"])
+        if proc.returncode != 0:
+            raise RuntimeError((proc.stderr or proc.stdout).strip())
         return str(payload["text"])
 
     def _python_for_framework(self) -> str:
