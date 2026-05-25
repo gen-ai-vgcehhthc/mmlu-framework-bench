@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from bench.parse import parse_answer
+
 
 def solver_prompt(prompt: str, role: str) -> str:
     return "\n".join(
@@ -32,6 +34,19 @@ def judge_prompt(prompt: str, answer_a: str, answer_b: str) -> str:
             "Final answer:",
         ]
     )
+
+
+def adaptive_consensus_answer(answer_a: str, answer_b: str) -> str | None:
+    parsed_a = parse_answer(answer_a)
+    parsed_b = parse_answer(answer_b)
+    if parsed_a and parsed_a == parsed_b:
+        return "\n".join(
+            [
+                f"Answer: {parsed_a}",
+                "Consensus: both independent solvers selected the same option.",
+            ]
+        )
+    return None
 
 
 def critic_prompt(prompt: str, critic_role: str, own_answer: str, other_answer: str) -> str:

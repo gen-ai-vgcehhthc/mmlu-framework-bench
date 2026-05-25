@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing_extensions import TypedDict
 
 from bench.runners.base import BaseRunner
-from bench.runners.debate import judge_prompt, solver_prompt
+from bench.runners.debate import adaptive_consensus_answer, judge_prompt, solver_prompt
 
 
-class LangGraphDebateRunner(BaseRunner):
-    name = "langgraph_debate"
+class LangGraphAdaptiveConsensusDebateRunner(BaseRunner):
+    name = "langgraph_adaptive_consensus_debate"
 
     def __init__(self, model):
         super().__init__(model)
@@ -28,6 +28,10 @@ class LangGraphDebateRunner(BaseRunner):
             return {"answer_b": runner.traced_answer("solver_b", solver_prompt(state["prompt"], "Solver B"))}
 
         def judge(state: State) -> dict[str, str]:
+            consensus = adaptive_consensus_answer(state["answer_a"], state["answer_b"])
+            if consensus:
+                runner.trace_event("consensus", consensus)
+                return {"final": consensus}
             return {"final": runner.traced_answer("judge", judge_prompt(state["prompt"], state["answer_a"], state["answer_b"]))}
 
         graph = StateGraph(State)

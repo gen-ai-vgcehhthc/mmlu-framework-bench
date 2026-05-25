@@ -5,20 +5,18 @@ import contextlib
 import json
 import sys
 
-from bench.model import OpencodeModel
+from bench.model import add_model_args, build_model
 from bench.runners import RUNNERS
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--framework", required=True, choices=sorted(RUNNERS))
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--timeout", type=int, default=180)
-    parser.add_argument("--no-pure", action="store_true")
+    add_model_args(parser, require_model=True)
     args = parser.parse_args(argv)
 
     prompt = sys.stdin.read()
-    model = OpencodeModel(args.model, timeout_s=args.timeout, pure=not args.no_pure)
+    model = build_model(args)
     runner = RUNNERS[args.framework](model)
     try:
         with contextlib.redirect_stdout(sys.stderr):

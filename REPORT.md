@@ -1,7 +1,7 @@
 # MMLU-Pro Agent Framework Comparison Report
 
 Date: 2026-05-25  
-Model backend: `opencode/deepseek-v4-flash-free` through `opencode run --pure`  
+Model backends: `opencode/deepseek-v4-flash-free` through `opencode run --pure`; Groq `llama-3.1-8b-instant` through OpenAI-compatible HTTP  
 Frameworks: LangGraph, CrewAI, Microsoft Agent Framework (MAF)  
 Dataset: `TIGER-Lab/MMLU-Pro`, `test` split
 
@@ -20,7 +20,7 @@ Recommendation:
 
 The harness builds the same MMLU-Pro prompt for every run and asks the model to return only `A` through `J`. Runners differ only in orchestration wrapper:
 
-- `direct`: calls opencode directly.
+- `direct`: calls the configured model backend directly.
 - `langgraph`: wraps the model call in a `StateGraph`.
 - `crewai`: wraps the model call in a CrewAI Flow.
 - `maf`: wraps the model call in a MAF functional workflow step.
@@ -48,7 +48,7 @@ The shuffled sample covered: math 2, engineering 2, physics 1, health 1, history
 
 After the initial smoke runs, the main MMLU-Pro experiment was rerun with `N=50`, shuffled with `seed=42`, covering 14 categories: economics, engineering, business, physics, other, law, health, math, history, psychology, philosophy, computer science, biology, and chemistry.
 
-This run compares single-agent and two-solver-plus-judge debate patterns:
+This completed run compares single-agent and the original two-solver-plus-judge debate pattern:
 
 ```powershell
 docker run --rm `
@@ -84,6 +84,26 @@ In this MMLU-Pro setup, the single-agent frameworks did not show consistent reas
 The debate topology did not produce a clear, framework-wide reasoning gain. LangGraph debate fell from 90% single-agent to 84%, CrewAI debate matched CrewAI single-agent at 80%, and MAF debate fell from 88% single-agent to 84%. The result does not support a claim that naive same-model debate reliably improves MMLU-Pro reasoning.
 
 The trace logs show why parse-aware evaluation matters: each debate example uses three model calls instead of one, so blank judge outputs can hide useful solver outputs. The corrected result should still be reported with the caveat that `solver_consensus` and `single_solver_fallback` are post-processing fallbacks, not native judge success. A critique topology has been added for follow-up runs to test whether explicit cross-examination is more useful than naive debate.
+
+After this run, the benchmark code was updated to replace the original `_debate` runners with `_adaptive_consensus_debate` runners. The new topology still starts with two independent solvers, but it skips the judge when both solvers parse to the same answer and records that short-circuit as a native `consensus` trace step. This converts part of the previous post-processing fallback into explicit framework behavior and reduces unnecessary provider calls.
+
+### N=200 Adaptive Consensus Follow-Up
+
+To test the revised topology at a larger sample size and lower cost, a second run used Groq `llama-3.1-8b-instant`, `N=200`, shuffled with `seed=42`, four Groq API keys, `max_tokens=64`, and adaptive consensus runners. The initial `concurrency=2` run hit Groq `HTTP 429` on fast runners, so failed rows were removed and resumed with `concurrency=1` plus HTTP retry/backoff. The final JSONL has 1,400 rows: 7 runners x 200 questions, with 0 errors and 0 parse failures.
+
+| Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| direct | single call | 200 | 35.5% | 0 | 0 | 0.31s | 0.27s | 0.48s |
+| LangGraph | single agent | 200 | 35.5% | 0 | 0 | 2.14s | 2.10s | 2.51s |
+| CrewAI | single agent | 200 | 35.5% | 0 | 0 | 7.59s | 7.59s | 10.52s |
+| MAF | single agent | 200 | 35.5% | 0 | 0 | 1.15s | 1.14s | 1.35s |
+| LangGraph | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 1.71s | 1.67s | 2.07s |
+| CrewAI | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 6.96s | 6.89s | 7.65s |
+| MAF | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 2.46s | 3.16s | 3.61s |
+
+All three adaptive runners reached the same accuracy because they implement the same topology over the same model backend. The topology short-circuited through solver consensus on 189/200 questions and called the judge on only 11/200 questions, for about 2.06 model calls per question instead of the worst-case 3. This is useful for cost control.
+
+The accuracy gain over single-call baselines was only +2.0 percentage points, or 4 more correct answers out of 200. That is a useful direction for follow-up, but not strong evidence by itself that same-model discussion reliably improves reasoning. The larger signal is operational: adaptive consensus reduced judge calls and gave consistent behavior across frameworks, while latency still reflected framework overhead.
 
 For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
 
@@ -171,13 +191,13 @@ LangGraph has the strongest graph-control ecosystem and LangSmith observability 
 
 This is a small, free-provider experiment, not a publishable model benchmark. The full MMLU-Pro split has 12,032 test examples; running all frameworks across the full split would require much more quota and time. The report should be read as an integration and orchestration comparison, not a claim about the model's MMLU-Pro score.
 
-The opencode CLI backend is practical and cheap, but it hides token usage and introduces CLI/database startup behavior. For a stronger cost study, add an OpenAI-compatible HTTP backend with usage metadata and fixed retry policy.
+The opencode CLI backend is practical and cheap, but it hides token usage and introduces CLI/database startup behavior. The harness now also supports OpenAI-compatible HTTP backends, including xAI Grok (`--backend grok`) and Groq (`--backend groq`). For a stronger cost study, record token usage from those provider responses.
 
 ## Next Steps
 
-1. Add a provider adapter that records token usage and price.
+1. Add token usage and price extraction for OpenAI-compatible provider responses.
 2. Add stratified sampling by category instead of pure shuffle.
-3. Run `N=100` with `concurrency=1` and `concurrency=4` on a quota-safe model.
+3. Run critique topology at `N=50` or `N=100` before trying `N=200`.
 4. Add native tool-call and HITL test cases beyond MMLU-Pro.
 5. Add observability screenshots/traces for each framework.
 

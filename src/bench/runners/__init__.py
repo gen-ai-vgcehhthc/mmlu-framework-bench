@@ -8,26 +8,26 @@ from bench.runners.subprocess_runner import SubprocessFrameworkRunner
 
 
 if os.environ.get("BENCH_WORKER") == "1":
-    from bench.runners.crewai_debate_runner import CrewAIDebateRunner
+    from bench.runners.crewai_adaptive_consensus_debate_runner import CrewAIAdaptiveConsensusDebateRunner
     from bench.runners.crewai_critique_runner import CrewAICritiqueRunner
     from bench.runners.crewai_runner import CrewAIRunner
-    from bench.runners.langgraph_debate_runner import LangGraphDebateRunner
+    from bench.runners.langgraph_adaptive_consensus_debate_runner import LangGraphAdaptiveConsensusDebateRunner
     from bench.runners.langgraph_critique_runner import LangGraphCritiqueRunner
     from bench.runners.langgraph_runner import LangGraphRunner
     from bench.runners.maf_critique_runner import MAFCritiqueRunner
-    from bench.runners.maf_debate_runner import MAFDebateRunner
+    from bench.runners.maf_adaptive_consensus_debate_runner import MAFAdaptiveConsensusDebateRunner
     from bench.runners.maf_runner import MAFRunner
 
     RUNNERS: dict[str, type[BaseRunner]] = {
         "direct": DirectRunner,
         "langgraph": LangGraphRunner,
-        "langgraph_debate": LangGraphDebateRunner,
+        "langgraph_adaptive_consensus_debate": LangGraphAdaptiveConsensusDebateRunner,
         "langgraph_critique": LangGraphCritiqueRunner,
         "crewai": CrewAIRunner,
-        "crewai_debate": CrewAIDebateRunner,
+        "crewai_adaptive_consensus_debate": CrewAIAdaptiveConsensusDebateRunner,
         "crewai_critique": CrewAICritiqueRunner,
         "maf": MAFRunner,
-        "maf_debate": MAFDebateRunner,
+        "maf_adaptive_consensus_debate": MAFAdaptiveConsensusDebateRunner,
         "maf_critique": MAFCritiqueRunner,
     }
 else:
@@ -35,8 +35,8 @@ else:
     class LangGraphSubprocessRunner(SubprocessFrameworkRunner):
         name = "langgraph"
 
-    class LangGraphDebateSubprocessRunner(SubprocessFrameworkRunner):
-        name = "langgraph_debate"
+    class LangGraphAdaptiveConsensusDebateSubprocessRunner(SubprocessFrameworkRunner):
+        name = "langgraph_adaptive_consensus_debate"
 
     class LangGraphCritiqueSubprocessRunner(SubprocessFrameworkRunner):
         name = "langgraph_critique"
@@ -44,8 +44,8 @@ else:
     class CrewAISubprocessRunner(SubprocessFrameworkRunner):
         name = "crewai"
 
-    class CrewAIDebateSubprocessRunner(SubprocessFrameworkRunner):
-        name = "crewai_debate"
+    class CrewAIAdaptiveConsensusDebateSubprocessRunner(SubprocessFrameworkRunner):
+        name = "crewai_adaptive_consensus_debate"
 
     class CrewAICritiqueSubprocessRunner(SubprocessFrameworkRunner):
         name = "crewai_critique"
@@ -53,8 +53,8 @@ else:
     class MAFSubprocessRunner(SubprocessFrameworkRunner):
         name = "maf"
 
-    class MAFDebateSubprocessRunner(SubprocessFrameworkRunner):
-        name = "maf_debate"
+    class MAFAdaptiveConsensusDebateSubprocessRunner(SubprocessFrameworkRunner):
+        name = "maf_adaptive_consensus_debate"
 
     class MAFCritiqueSubprocessRunner(SubprocessFrameworkRunner):
         name = "maf_critique"
@@ -62,12 +62,12 @@ else:
     RUNNERS: dict[str, type[BaseRunner]] = {
         "direct": DirectRunner,
         "langgraph": LangGraphSubprocessRunner,
-        "langgraph_debate": LangGraphDebateSubprocessRunner,
+        "langgraph_adaptive_consensus_debate": LangGraphAdaptiveConsensusDebateSubprocessRunner,
         "langgraph_critique": LangGraphCritiqueSubprocessRunner,
         "crewai": CrewAISubprocessRunner,
-        "crewai_debate": CrewAIDebateSubprocessRunner,
+        "crewai_adaptive_consensus_debate": CrewAIAdaptiveConsensusDebateSubprocessRunner,
         "crewai_critique": CrewAICritiqueSubprocessRunner,
         "maf": MAFSubprocessRunner,
-        "maf_debate": MAFDebateSubprocessRunner,
+        "maf_adaptive_consensus_debate": MAFAdaptiveConsensusDebateSubprocessRunner,
         "maf_critique": MAFCritiqueSubprocessRunner,
     }

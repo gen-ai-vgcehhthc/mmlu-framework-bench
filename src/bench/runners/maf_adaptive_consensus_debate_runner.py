@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 
 from bench.runners.base import BaseRunner
-from bench.runners.debate import judge_prompt, solver_prompt
+from bench.runners.debate import adaptive_consensus_answer, judge_prompt, solver_prompt
 
 
-class MAFDebateRunner(BaseRunner):
-    name = "maf_debate"
+class MAFAdaptiveConsensusDebateRunner(BaseRunner):
+    name = "maf_adaptive_consensus_debate"
 
     def __init__(self, model):
         super().__init__(model)
@@ -30,6 +30,10 @@ class MAFDebateRunner(BaseRunner):
         @workflow
         async def solve(prompt: str) -> str:
             answer_a, answer_b = await asyncio.gather(solver_a(prompt), solver_b(prompt))
+            consensus = adaptive_consensus_answer(answer_a, answer_b)
+            if consensus:
+                runner.trace_event("consensus", consensus)
+                return consensus
             return await judge(prompt, answer_a, answer_b)
 
         self._workflow = solve

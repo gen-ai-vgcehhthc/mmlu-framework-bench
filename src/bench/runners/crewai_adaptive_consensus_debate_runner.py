@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from bench.runners.base import BaseRunner
-from bench.runners.debate import judge_prompt, solver_prompt
+from bench.runners.debate import adaptive_consensus_answer, judge_prompt, solver_prompt
 
 
-class CrewAIDebateRunner(BaseRunner):
-    name = "crewai_debate"
+class CrewAIAdaptiveConsensusDebateRunner(BaseRunner):
+    name = "crewai_adaptive_consensus_debate"
 
     def answer(self, prompt: str) -> str:
         from crewai.flow.flow import Flow, listen, start
@@ -24,6 +24,10 @@ class CrewAIDebateRunner(BaseRunner):
 
             @listen(solve_b)
             def judge(self, answer_b: str) -> str:
+                consensus = adaptive_consensus_answer(self.state["answer_a"], answer_b)
+                if consensus:
+                    runner.trace_event("consensus", consensus)
+                    return consensus
                 return runner.traced_answer("judge", judge_prompt(self.state["prompt"], self.state["answer_a"], answer_b))
 
         self.last_trace = []

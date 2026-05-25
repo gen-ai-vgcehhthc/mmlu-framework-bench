@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+from bench.model import model_worker_args
 from bench.runners.base import BaseRunner
 
 
@@ -25,13 +26,8 @@ class SubprocessFrameworkRunner(BaseRunner):
             "bench.worker",
             "--framework",
             self.name,
-            "--model",
-            self.model.model,
-            "--timeout",
-            str(self.model.timeout_s),
         ]
-        if not self.model.pure:
-            command.append("--no-pure")
+        command.extend(model_worker_args(self.model))
 
         proc = subprocess.run(
             command,
@@ -56,7 +52,9 @@ class SubprocessFrameworkRunner(BaseRunner):
 
     def _python_for_framework(self) -> str:
         family = self.name
-        if family.endswith("_debate"):
-            family = family.removesuffix("_debate")
+        for suffix in ("_adaptive_consensus_debate", "_critique", "_debate"):
+            if family.endswith(suffix):
+                family = family.removesuffix(suffix)
+                break
         env_name = f"BENCH_{family.upper()}_PYTHON"
         return os.environ.get(env_name) or sys.executable

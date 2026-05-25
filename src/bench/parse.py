@@ -74,6 +74,10 @@ def parse_answer_with_trace(text: str, trace: list[dict[str, object]] | None) ->
     if judge:
         return judge, "trace_judge"
 
+    consensus = by_role.get("consensus")
+    if consensus:
+        return consensus, "trace_consensus"
+
     solver_answers = [by_role[role] for role in ("solver_a", "solver_b") if role in by_role]
     if len(solver_answers) == 2 and solver_answers[0] == solver_answers[1]:
         return solver_answers[0], "solver_consensus"
