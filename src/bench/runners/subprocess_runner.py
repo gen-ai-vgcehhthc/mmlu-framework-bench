@@ -44,6 +44,7 @@ class SubprocessFrameworkRunner(BaseRunner):
                 raise RuntimeError((proc.stderr or proc.stdout).strip())
             raise
         self.last_trace = payload.get("trace") or []
+        self.last_usage = payload.get("usage")
         if payload.get("error"):
             raise RuntimeError(payload["error"])
         if proc.returncode != 0:

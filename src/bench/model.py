@@ -128,7 +128,8 @@ class OpenAICompatibleModel:
             text = data["choices"][0]["message"]["content"] or ""
         except Exception as exc:
             return ModelResult(text=raw, elapsed_s=elapsed, error=f"invalid response JSON: {exc}")
-        return ModelResult(text=text, elapsed_s=elapsed, error=None)
+        usage = data.get("usage")
+        return ModelResult(text=text, elapsed_s=elapsed, error=None, usage=usage if isinstance(usage, dict) else None)
 
 
 def add_model_args(parser: argparse.ArgumentParser, *, require_model: bool = False) -> None:

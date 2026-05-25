@@ -19,6 +19,7 @@ class ModelResult:
     text: str
     elapsed_s: float
     error: str | None = None
+    usage: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class RunResult:
     error: str | None = None
     trace: list[dict[str, Any]] | None = None
     prediction_source: str | None = None
+    usage: dict[str, Any] | None = None
     attempts: int = 1
 
     def to_json(self) -> dict[str, Any]:
@@ -55,4 +57,6 @@ class RunResult:
             payload["trace"] = self.trace
         if self.prediction_source is not None:
             payload["prediction_source"] = self.prediction_source
+        if self.usage is not None:
+            payload["usage"] = self.usage
         return payload

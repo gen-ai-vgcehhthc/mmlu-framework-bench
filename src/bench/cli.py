@@ -43,9 +43,16 @@ def main(argv: list[str] | None = None) -> int:
         model = build_model(args)
         if args.prewarm:
             model.complete("Return only the letter A.")
-        runner = runner_cls(model)
         print(f"Running {framework} on {len(pending)} questions with {model.model}", file=sys.stderr)
-        for result in run_framework_iter(framework, model.model, runner, pending, args.concurrency, args.parse_retries):
+        for result in run_framework_iter(
+            framework,
+            model.model,
+            runner_cls,
+            model,
+            pending,
+            args.concurrency,
+            args.parse_retries,
+        ):
             append_jsonl(output_path, [result])
             all_results.append(result)
             completed.add((framework, result.question_id))
@@ -67,19 +74,21 @@ def main(argv: list[str] | None = None) -> int:
 def run_framework_iter(
     framework: str,
     model: str,
-    runner,
+    runner_cls,
+    model_client,
     questions: list[Question],
     concurrency: int,
     parse_retries: int,
 ):
     if concurrency <= 1:
+        runner = runner_cls(model_client)
         for question in questions:
             yield run_one(framework, model, runner, question, parse_retries=parse_retries)
         return
 
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [
-            pool.submit(run_one, framework, model, runner, question, parse_retries)
+            pool.submit(run_one, framework, model, runner_cls(model_client), question, parse_retries)
             for question in questions
         ]
         for future in as_completed(futures):
@@ -93,6 +102,7 @@ def run_one(framework: str, model: str, runner, question: Question, parse_retrie
 
     for attempt in range(parse_retries + 1):
         runner.last_trace = []
+        runner.last_usage = None
         started = time.perf_counter()
         try:
             raw = runner.answer(prompt)
@@ -111,6 +121,7 @@ def run_one(framework: str, model: str, runner, question: Question, parse_retrie
                 raw_output=clean_output(raw),
                 trace=runner.last_trace or None,
                 prediction_source=prediction_source,
+                usage=runner.last_usage,
                 attempts=attempt + 1,
             )
             if predicted is not None:
@@ -130,6 +141,7 @@ def run_one(framework: str, model: str, runner, question: Question, parse_retrie
                 raw_output="",
                 error=str(exc),
                 trace=runner.last_trace or None,
+                usage=runner.last_usage,
                 attempts=attempt + 1,
             )
 

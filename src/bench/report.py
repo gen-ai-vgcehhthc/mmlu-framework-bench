@@ -10,8 +10,11 @@ def summarize(results: list[RunResult]) -> str:
     lines = [
         "# MMLU-Pro Framework Bench Summary",
         "",
-        "| Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            "| Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | "
+            "Prompt Tokens | Completion Tokens | Total Tokens |"
+        ),
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
     by_framework: dict[str, list[RunResult]] = defaultdict(list)
@@ -28,13 +31,34 @@ def summarize(results: list[RunResult]) -> str:
         avg = statistics.mean(latencies) if latencies else 0
         median = statistics.median(latencies) if latencies else 0
         p95 = percentile(latencies, 95)
+        prompt_tokens = usage_total(group, "prompt_tokens")
+        completion_tokens = usage_total(group, "completion_tokens")
+        total_tokens = usage_total(group, "total_tokens")
         lines.append(
             f"| {framework} | {n} | {correct / n:.1%} | {errors} | {parse_failures} | "
-            f"{avg:.2f}s | {median:.2f}s | {p95:.2f}s |"
+            f"{avg:.2f}s | {median:.2f}s | {p95:.2f}s | "
+            f"{format_usage(prompt_tokens)} | {format_usage(completion_tokens)} | {format_usage(total_tokens)} |"
         )
 
     lines.extend(["", *scorecard()])
     return "\n".join(lines) + "\n"
+
+
+def usage_total(results: list[RunResult], key: str) -> int | None:
+    values = [
+        int(result.usage[key])
+        for result in results
+        if result.usage is not None and isinstance(result.usage.get(key), (int, float))
+    ]
+    if not values:
+        return None
+    return sum(values)
+
+
+def format_usage(value: int | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:,}"
 
 
 def percentile(values: list[float], pct: float) -> float:
