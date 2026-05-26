@@ -96,8 +96,12 @@ Initial results:
 | Groq 8B selective critique | 200 | 37.0% | 0 | 0 | 1.73s to 7.07s by framework | 135K to 136K per framework |
 | MAF selective, Groq 8B + Groq 70B | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
 | MAF selective, Groq 8B + opencode DeepSeek | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
+| MAF selective, Groq 8B + opencode DeepSeek | 100 | 80.0% | 0 | 0 | 27.65s | 93,311 Groq-reported tokens |
+| MAF selective, Groq 8B + opencode DeepSeek | 200 | 81.5% | 0 | 0 | 25.83s | 187,217 Groq-reported tokens |
 
-These mixed-model samples are too small for a final accuracy claim, but they show why heterogeneity is worth testing: disagreement cases changed more often and sometimes improved. The opencode mix is much slower and does not expose full token usage, while the Groq 70B mix is easier to measure but uses more Groq quota.
+The `N=200` mixed opencode result is much stronger than same-model debate, but it should be framed carefully. It shows that heterogeneous agents can provide useful reasoning signal, not that the framework itself improves the underlying model. On the same 200 questions, Groq direct and MAF single-agent scored 35.5%, MAF adaptive consensus scored 37.5%, MAF critique scored 36.0%, and MAF mixed Groq+opencode selective critique scored 81.5%. Trace analysis shows opencode DeepSeek was the dominant source of improvement: `solver_b` was correct on 158/179 parseable solver outputs, while Groq `solver_a` was correct on 75/200.
+
+One caveat: 1/200 opencode traces contained an Exa Web Search marker. Excluding that row gives 162/199 = 81.4%, so the aggregate conclusion is unchanged, but the result should be labeled as opencode-backed mixed-model orchestration rather than strictly closed-book reasoning.
 
 ## Trace Note
 

@@ -11,7 +11,7 @@ This MMLU-Pro experiment should be read as a reasoning orchestration benchmark, 
 
 The main result is that framework choice did not materially change accuracy when the topology, prompt, and model were held constant. LangGraph, CrewAI, and MAF reached the same scores for the same Groq topologies. Their differences were mostly operational: latency, control-flow ergonomics, dependency isolation, observability, and ease of expressing stateful multi-agent patterns.
 
-Adaptive consensus was the best same-model topology tested. On Groq `llama-3.1-8b-instant`, it improved direct accuracy from 35.5% to 37.5% at `N=200`, a net gain of 4 questions. Full critique was more expensive and weaker at 36.0%. Selective critique reduced critique cost dramatically but landed at 37.0%, slightly below adaptive consensus. The mixed-model runs are too small for a final claim, but they are the most promising direction for the MAF-specific hypothesis that agent discussion can improve reasoning.
+Adaptive consensus was the best same-model topology tested. On Groq `llama-3.1-8b-instant`, it improved direct accuracy from 35.5% to 37.5% at `N=200`, a net gain of 4 questions. Full critique was more expensive and weaker at 36.0%. Selective critique reduced critique cost dramatically but landed at 37.0%, slightly below adaptive consensus. The strongest result came from a mixed-model MAF selective run: Groq 8B as the primary model plus opencode DeepSeek as the secondary model reached 81.5% at `N=200`. That result should be interpreted as model heterogeneity plus topology, not as a pure framework effect.
 
 Recommended reading:
 
@@ -98,12 +98,16 @@ Selective critique was cheaper than full critique, about 135K tokens per framewo
 
 The harness now supports role-routed mixed-model runs through `--secondary-backend`, `--secondary-model`, and `--secondary-roles`. The first tests kept Groq `llama-3.1-8b-instant` as the primary model and routed `solver_b` and `critic_b` to a secondary model.
 
-| Mixed Run | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Total Tokens |
+| Mixed Run | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Tokens |
 |---|---|---:|---:|---:|---:|---:|---:|
 | Groq 8B primary + Groq 70B secondary | MAF selective critique | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
 | Groq 8B primary + opencode DeepSeek secondary | MAF selective critique | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
+| Groq 8B primary + opencode DeepSeek secondary | MAF selective critique | 100 | 80.0% | 0 | 0 | 27.65s | 93,311 Groq-reported tokens |
+| Groq 8B primary + opencode DeepSeek secondary | MAF selective critique | 200 | 81.5% | 0 | 0 | 25.83s | 187,217 Groq-reported tokens |
 
-These samples are exploratory only and should not be reported as stable accuracy gains. They are useful because they test the more plausible version of the multi-agent reasoning hypothesis: disagreement between different models may provide more signal than debate among copies of the same weak model. The Groq 70B mix is faster and has complete token accounting. The opencode mix gives stronger model diversity but is much slower and does not expose full token usage.
+The mixed opencode result is the clearest positive signal in this study, but it changes the interpretation. On the same 200-question sample, Groq direct and MAF single-agent scored 35.5%, MAF adaptive consensus scored 37.5%, MAF same-model critique scored 36.0%, and MAF mixed Groq+opencode selective critique scored 81.5%. Trace analysis shows why: Groq `solver_a` was correct on 75/200 questions, while opencode DeepSeek `solver_b` was correct on 158/179 parseable solver outputs. In direct solver comparisons, `solver_b` was right while `solver_a` was wrong on 96 questions; the reverse happened only 5 times.
+
+This means the gain is mainly driven by a much stronger or more suitable secondary model, with the framework topology acting as the routing and arbitration layer. It is still relevant to the MAF multi-agent hypothesis because heterogeneous agents gave useful disagreement signal, but it is not evidence that framework debate alone improves reasoning. One caveat: 1/200 opencode traces contained an Exa Web Search marker. Excluding that row gives 162/199 = 81.4%, so the aggregate result is effectively unchanged, but the run should be labeled as opencode-backed rather than strictly closed-book.
 
 ## Metric-by-Metric Analysis
 
@@ -169,7 +173,7 @@ Accuracy should be interpreted carefully. With the same model and topology, the 
 1. For the combined GAIA / tau-bench / MMLU-Pro report, frame MMLU-Pro as the closed-book reasoning and orchestration slice.
 2. Use adaptive consensus as the same-model baseline. It was the best cost/accuracy tradeoff tested.
 3. Treat full critique as currently unjustified for weak same-model runs because it adds cost and can break correct answers.
-4. Continue mixed-model selective critique with a larger sample, ideally `N=100` or `N=200`, before making an accuracy claim.
+4. Validate the mixed-model result with a strict no-web/no-tool secondary backend or a fully token-accounted HTTP secondary model before making a closed-book accuracy claim.
 5. Use GAIA and tau-bench to evaluate tool calling, long-horizon state, human approval, and workflow realism.
 6. Keep direct runs in every experiment and always report token usage, parse failures, timeout/error counts, and trace availability.
 
