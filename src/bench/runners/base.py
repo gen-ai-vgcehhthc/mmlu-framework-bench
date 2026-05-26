@@ -31,11 +31,13 @@ class BaseRunner:
         )
 
     def traced_answer(self, role: str, prompt: str) -> str:
-        result = self.model.complete(prompt)
+        model = model_for_role(self.model, role)
+        result = model.complete(prompt)
         self.last_usage = merge_usage(self.last_usage, result.usage)
         self.last_trace.append(
             {
                 "role": role,
+                "model": model.model,
                 "elapsed_s": result.elapsed_s,
                 "error": result.error,
                 "output": result.text,
@@ -58,3 +60,10 @@ def merge_usage(*items: dict[str, Any] | None) -> dict[str, Any] | None:
             elif key not in merged:
                 merged[key] = value
     return merged or None
+
+
+def model_for_role(model: ModelClient, role: str) -> ModelClient:
+    selector = getattr(model, "for_role", None)
+    if callable(selector):
+        return selector(role)
+    return model

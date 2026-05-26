@@ -133,6 +133,32 @@ class OpenAICompatibleModel:
         return ModelResult(text=text, elapsed_s=elapsed, error=None, usage=usage if isinstance(usage, dict) else None)
 
 
+@dataclass(frozen=True)
+class RoleRoutedModel:
+    primary: ModelClient
+    secondary: ModelClient
+    secondary_roles: tuple[str, ...] = ("solver_b", "critic_b")
+
+    @property
+    def model(self) -> str:
+        roles = ",".join(self.secondary_roles)
+        return f"{self.primary.model}+{self.secondary.model}@{roles}"
+
+    @property
+    def timeout_s(self) -> int:
+        return self.primary.timeout_s
+
+    @property
+    def pure(self) -> bool:
+        return self.primary.pure
+
+    def complete(self, prompt: str) -> ModelResult:
+        return self.primary.complete(prompt)
+
+    def for_role(self, role: str) -> ModelClient:
+        return self.secondary if role in self.secondary_roles else self.primary
+
+
 def add_model_args(parser: argparse.ArgumentParser, *, require_model: bool = False) -> None:
     parser.add_argument(
         "--backend",
@@ -154,17 +180,55 @@ def add_model_args(parser: argparse.ArgumentParser, *, require_model: bool = Fal
     parser.add_argument("--http-retries", type=int, default=3, help="Retry OpenAI-compatible HTTP 429/5xx responses.")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--no-pure", action="store_true", help="Do not pass --pure to opencode.")
+    parser.add_argument(
+        "--secondary-backend",
+        choices=["opencode", "openai-compatible", "grok", "groq"],
+        help="Optional secondary model backend for role-routed multi-agent runs.",
+    )
+    parser.add_argument("--secondary-model", help="Model name for the secondary role-routed model.")
+    parser.add_argument("--secondary-base-url", help="OpenAI-compatible base URL for the secondary model.")
+    parser.add_argument("--secondary-api-key-env", help="API key env spec for the secondary model.")
+    parser.add_argument(
+        "--secondary-roles",
+        default="solver_b,critic_b",
+        help="Comma-separated trace roles routed to the secondary model. Default: solver_b,critic_b.",
+    )
 
 
 def build_model(args: argparse.Namespace) -> ModelClient:
-    backend = args.backend
+    primary = build_backend_model(
+        backend=args.backend,
+        model=args.model,
+        base_url=args.base_url,
+        api_key_env=args.api_key_env,
+        args=args,
+    )
+    if not args.secondary_backend:
+        return primary
+
+    secondary = build_backend_model(
+        backend=args.secondary_backend,
+        model=args.secondary_model,
+        base_url=args.secondary_base_url,
+        api_key_env=args.secondary_api_key_env,
+        args=args,
+    )
+    secondary_roles = tuple(role.strip() for role in args.secondary_roles.split(",") if role.strip())
+    return RoleRoutedModel(primary=primary, secondary=secondary, secondary_roles=secondary_roles)
+
+
+def build_backend_model(
+    *,
+    backend: str,
+    model: str | None,
+    base_url: str | None,
+    api_key_env: str | None,
+    args: argparse.Namespace,
+) -> ModelClient:
     if backend == "opencode":
-        model = args.model or "opencode/deepseek-v4-flash-free"
+        model = model or "opencode/deepseek-v4-flash-free"
         return OpencodeModel(model=model, timeout_s=args.timeout, pure=not args.no_pure)
 
-    base_url = args.base_url
-    api_key_env = args.api_key_env
-    model = args.model
     if backend == "grok":
         base_url = base_url or "https://api.x.ai/v1"
         api_key_env = api_key_env or "XAI_API_KEY,XAI_API_KEYS"
@@ -193,6 +257,11 @@ def build_model(args: argparse.Namespace) -> ModelClient:
 
 
 def model_worker_args(model: ModelClient) -> list[str]:
+    if isinstance(model, RoleRoutedModel):
+        args = model_worker_args(model.primary)
+        args.extend(secondary_model_worker_args(model.secondary))
+        args.extend(["--secondary-roles", ",".join(model.secondary_roles)])
+        return args
     if isinstance(model, OpencodeModel):
         args = ["--backend", "opencode", "--model", model.model, "--timeout", str(model.timeout_s)]
         if not model.pure:
@@ -218,6 +287,26 @@ def model_worker_args(model: ModelClient) -> list[str]:
             str(model.http_retries),
         ]
     raise TypeError(f"unsupported model client: {type(model)!r}")
+
+
+def secondary_model_worker_args(model: ModelClient) -> list[str]:
+    if isinstance(model, OpencodeModel):
+        args = ["--secondary-backend", "opencode", "--secondary-model", model.model]
+        if not model.pure:
+            args.append("--no-pure")
+        return args
+    if isinstance(model, OpenAICompatibleModel):
+        return [
+            "--secondary-backend",
+            "openai-compatible",
+            "--secondary-model",
+            model.model,
+            "--secondary-base-url",
+            model.base_url,
+            "--secondary-api-key-env",
+            model.api_key_env,
+        ]
+    raise TypeError(f"unsupported secondary model client: {type(model)!r}")
 
 
 def resolve_api_key(env_spec: str) -> str | None:

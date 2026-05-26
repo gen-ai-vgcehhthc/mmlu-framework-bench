@@ -85,6 +85,20 @@ The next architecture should keep the useful part of adaptive consensus and make
 
 This is implemented as `langgraph_selective_critique`, `crewai_selective_critique`, and `maf_selective_critique`. It targets the main failure observed in full critique: critique fixed 17 direct-wrong answers but broke 16 direct-correct answers. Selective critique should preserve the 189/200 easy consensus cases from adaptive consensus while spending extra reasoning only on disagreement cases, where the previous judge was weakest.
 
+## Mixed-Model Follow-Up
+
+The harness also supports role-routed mixed-model runs. The primary model is used by default, while roles listed in `--secondary-roles` use the secondary model. The intended first test is to keep the cheap Groq `llama-3.1-8b-instant` as Solver A and judge, then route Solver B and Critic B to a different model such as Groq `llama-3.3-70b-versatile` or opencode `deepseek-v4-flash-free`. This tests whether heterogeneity helps disagreement cases more than same-model self-critique.
+
+Initial results:
+
+| Run | N | Accuracy | Errors | Parse Failures | Avg Latency | Total Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Groq 8B selective critique | 200 | 37.0% | 0 | 0 | 1.73s to 7.07s by framework | 135K to 136K per framework |
+| MAF selective, Groq 8B + Groq 70B | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
+| MAF selective, Groq 8B + opencode DeepSeek | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
+
+These mixed-model samples are too small for a final accuracy claim, but they show why heterogeneity is worth testing: disagreement cases changed more often and sometimes improved. The opencode mix is much slower and does not expose full token usage, while the Groq 70B mix is easier to measure but uses more Groq quota.
+
 ## Trace Note
 
 All 150 debate rows include a `trace` array containing solver A, solver B, and judge outputs with per-call latency and errors. A trace-aware re-score recovers judge-blank rows from solver outputs when appropriate, and the remaining blank rows were retried. Final scoring used raw output for 316 rows, solver consensus fallback for 24 rows, and single-solver fallback for 10 rows.

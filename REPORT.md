@@ -142,6 +142,29 @@ The next topology is `selective_critique`, implemented for all three frameworks.
 
 This design directly addresses the critique run's failure mode. Full critique changed many answers, but its gains and losses nearly canceled out: it fixed 17 direct-wrong questions and broke 16 direct-correct questions. Selective critique should avoid touching the 189/200 solver-consensus cases observed in adaptive consensus, while adding extra review only to the 11/200 disagreement cases where the simple judge was weakest.
 
+The harness now also supports role-routed mixed-model runs through `--secondary-backend`, `--secondary-model`, and `--secondary-roles`. The first mixed-model experiments should keep the cheap model on Solver A and judge, then route Solver B and Critic B to a different model. This keeps cost bounded while testing whether model heterogeneity helps the disagreement cases that same-model critique struggled to resolve.
+
+### Selective Critique and Mixed-Model Results
+
+The selective critique topology was run at `N=200` on Groq `llama-3.1-8b-instant` for all three frameworks. The final result file has 600 rows with 0 errors and 0 parse failures.
+
+| Framework | N | Accuracy | Avg Latency | Median | P95 | Total Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| LangGraph selective critique | 200 | 37.0% | 2.38s | 1.80s | 4.76s | 136,112 |
+| CrewAI selective critique | 200 | 37.0% | 7.07s | 6.92s | 8.03s | 135,001 |
+| MAF selective critique | 200 | 37.0% | 1.73s | 1.16s | 4.48s | 135,001 |
+
+Selective critique was slightly worse than adaptive consensus in this run: 37.0% versus 37.5%. It still beat direct by +3 correct answers out of 200, but adaptive consensus beat direct by +4. The topology behaved as designed: about 190/200 examples short-circuited through solver consensus, and only 10/200 went to critique. This made it far cheaper than full critique: about 135K tokens per framework versus 388K.
+
+Mixed-model smoke tests were then run with MAF selective critique:
+
+| Mixed Run | N | Accuracy | Errors | Parse Failures | Avg Latency | Total Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Groq 8B primary + Groq 70B secondary | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
+| Groq 8B primary + opencode DeepSeek secondary | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
+
+These mixed-model samples are exploratory only. They are promising enough to justify a larger run, but not large enough to claim a stable accuracy gain. The Groq 70B secondary is easier to measure and much faster than opencode, while the opencode mix gives stronger model diversity at the cost of much higher latency and incomplete token accounting.
+
 Primary shuffled sample, `N=8` per runner:
 
 | Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |

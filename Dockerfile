@@ -13,16 +13,17 @@ RUN apt-get update \
 RUN npm install -g opencode-ai
 
 COPY requirements.txt pyproject.toml ./
-COPY src ./src
-RUN pip install -r requirements.txt -e .
-
 COPY requirements ./requirements
+RUN pip install -r requirements.txt
 RUN python -m venv /opt/venvs/langgraph \
     && /opt/venvs/langgraph/bin/pip install --no-cache-dir -r requirements/langgraph.txt
 RUN python -m venv /opt/venvs/crewai \
     && /opt/venvs/crewai/bin/pip install --no-cache-dir -r requirements/crewai.txt
 RUN python -m venv /opt/venvs/maf \
     && /opt/venvs/maf/bin/pip install --no-cache-dir -r requirements/maf.txt
+
+COPY src ./src
+RUN pip install -e . --no-deps
 
 COPY README.md ./
 COPY REPORT.md ./

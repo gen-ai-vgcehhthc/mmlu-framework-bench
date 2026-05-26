@@ -112,6 +112,23 @@ python -m bench.cli `
 
 Alternatively, set `GROQ_API_KEY_1`, `GROQ_API_KEY_2`, and so on; `--backend groq` auto-detects numbered suffixes from the default `GROQ_API_KEY` prefix.
 
+Run a mixed-model selective critique test:
+
+```powershell
+$env:GROQ_API_KEYS = "<key1>;<key2>"
+docker run --rm `
+  -v ${PWD}/results:/app/results `
+  -e GROQ_API_KEYS `
+  mmlu-framework-bench `
+  --backend groq `
+  --model llama-3.1-8b-instant `
+  --secondary-backend groq `
+  --secondary-model llama-3.3-70b-versatile `
+  --secondary-roles solver_b,critic_b `
+  --framework maf_selective_critique `
+  --limit 20 --shuffle --seed 42
+```
+
 ## Full Run
 
 The full MMLU-Pro test split is large and can hit free-provider limits. Start with a category or small limit first.
@@ -141,6 +158,7 @@ Useful switches:
 - `--max-model-calls 300` aborts before a framework run if the worst-case call count could exceed the budget.
 - `--api-key-env GROQ_API_KEYS` rotates across multiple keys when the env var contains comma- or semicolon-separated keys.
 - OpenAI-compatible responses that include a `usage` object are written to JSONL rows and trace events, then summarized as prompt, completion, and total tokens.
+- `--secondary-backend ... --secondary-model ...` enables mixed-model multi-agent runs. By default, `solver_b` and `critic_b` use the secondary model; override with `--secondary-roles solver_b,critic_b,judge`.
 
 Re-score an existing JSONL with the current parser and debate trace fallback:
 
@@ -160,5 +178,6 @@ python -m bench.rescore results/mmlu-pro-debate50-seed42.jsonl `
 - `langgraph_critique`, `crewai_critique`, and `maf_critique` add a critique topology: two solvers, two cross-critiques, then one judge.
 - `langgraph_selective_critique`, `crewai_selective_critique`, and `maf_selective_critique` run critique only when the two solvers disagree. If critics converge, the judge is skipped; otherwise a final judge sees the solvers and critiques.
 - Multi-agent runners emit a `trace` array in JSONL results so solver, critic, and judge behavior can be inspected after the run.
+- Mixed-model runs record the model used by each traced role in `trace[].model`.
 - The Docker image installs each framework in its own virtual environment because current CrewAI and MAF releases require incompatible OpenTelemetry versions.
 - Cost is marked unavailable for opencode CLI runs because the CLI output does not expose per-call token usage in a stable machine-readable format. Groq/Grok/OpenAI-compatible HTTP runs record provider token usage when the provider returns it.
