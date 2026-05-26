@@ -96,10 +96,15 @@ Initial results:
 | Groq 8B selective critique | 200 | 37.0% | 0 | 0 | 1.73s to 7.07s by framework | 135K to 136K per framework |
 | MAF selective, Groq 8B + Groq 70B | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
 | MAF selective, Groq 8B + opencode DeepSeek | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
+| MAF selective, Groq 70B + Groq 70B | 200 | 53.5% | 0 | 0 | 1.18s | 139,805 |
+| MAF selective, Groq 70B + Groq 8B | 200 | 56.0% | 0 | 0 | 2.01s | 271,837 |
+| MAF selective, Groq 8B + Groq 70B | 200 | 49.5% | 0 | 0 | 18.94s | 273,497 |
 | MAF selective, Groq 8B + opencode DeepSeek | 100 | 80.0% | 0 | 0 | 27.65s | 93,311 Groq-reported tokens |
 | MAF selective, Groq 8B + opencode DeepSeek | 200 | 81.5% | 0 | 0 | 25.83s | 187,217 Groq-reported tokens |
 
-The `N=200` mixed opencode result is much stronger than same-model debate, but it should be framed carefully. It shows that heterogeneous agents can provide useful reasoning signal, not that the framework itself improves the underlying model. On the same 200 questions, Groq direct and MAF single-agent scored 35.5%, MAF adaptive consensus scored 37.5%, MAF critique scored 36.0%, and MAF mixed Groq+opencode selective critique scored 81.5%. Trace analysis shows opencode DeepSeek was the dominant source of improvement: `solver_b` was correct on 158/179 parseable solver outputs, while Groq `solver_a` was correct on 75/200.
+The Groq-only mixed runs show that stronger models help, but not enough to explain the opencode result. `70B+70B` reached 53.5%, and the two 70B solvers agreed on 186/200 questions, so same-model deliberation still added limited independent signal. `70B+8B` reached 56.0%, while the reverse `8B+70B` reached 49.5%, suggesting the stronger model is more useful as primary/judge than as a secondary dissenter. The reverse run also had a large latency tail, with p95 at 124.37s.
+
+The `N=200` mixed opencode result is much stronger than same-model debate, but it should be framed carefully. It shows that heterogeneous agents can provide useful reasoning signal, not that the framework itself improves the underlying model. On the same 200 questions, Groq direct and MAF single-agent scored 35.5%, MAF adaptive consensus scored 37.5%, MAF critique scored 36.0%, Groq `70B+70B` selective critique scored 53.5%, and MAF mixed Groq+opencode selective critique scored 81.5%. Trace analysis shows opencode DeepSeek was the dominant source of improvement: `solver_b` was correct on 158/179 parseable solver outputs, while Groq 8B `solver_a` was correct on 75/200.
 
 One caveat: 1/200 opencode traces contained an Exa Web Search marker. Excluding that row gives 162/199 = 81.4%, so the aggregate conclusion is unchanged, but the result should be labeled as opencode-backed mixed-model orchestration rather than strictly closed-book reasoning.
 
