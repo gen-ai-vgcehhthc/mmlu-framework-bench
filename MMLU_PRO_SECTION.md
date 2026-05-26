@@ -73,6 +73,18 @@ The critique topology was more expensive but did not improve enough to justify i
 
 This supports a narrower conclusion: same-model multi-agent discussion can change answers, but stronger topology alone is not enough. Adaptive consensus is the best current tradeoff because it gains the most accuracy in this run with far fewer calls than critique. Critique needs either a stronger judge, heterogeneous models, better disagreement detection, or selective invocation only on high-uncertainty items.
 
+## Next Topology: Selective Critique
+
+The next architecture should keep the useful part of adaptive consensus and make critique conditional:
+
+1. Run two independent solvers.
+2. If both solvers parse to the same answer, return consensus and skip all later calls.
+3. If solvers disagree, run two cross-critics.
+4. If both critics converge on the same revised answer, return critic consensus.
+5. Otherwise, call a final judge with the original prompt, both solver outputs, and both critiques.
+
+This is implemented as `langgraph_selective_critique`, `crewai_selective_critique`, and `maf_selective_critique`. It targets the main failure observed in full critique: critique fixed 17 direct-wrong answers but broke 16 direct-correct answers. Selective critique should preserve the 189/200 easy consensus cases from adaptive consensus while spending extra reasoning only on disagreement cases, where the previous judge was weakest.
+
 ## Trace Note
 
 All 150 debate rows include a `trace` array containing solver A, solver B, and judge outputs with per-call latency and errors. A trace-aware re-score recovers judge-blank rows from solver outputs when appropriate, and the remaining blank rows were retried. Final scoring used raw output for 316 rows, solver consensus fallback for 24 rows, and single-solver fallback for 10 rows.

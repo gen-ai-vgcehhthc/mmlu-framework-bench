@@ -53,9 +53,9 @@ class SubprocessFrameworkRunner(BaseRunner):
 
     def _python_for_framework(self) -> str:
         family = self.name
-        for suffix in ("_adaptive_consensus_debate", "_critique", "_debate"):
-            if family.endswith(suffix):
-                family = family.removesuffix(suffix)
+        for candidate in ("langgraph", "crewai", "maf"):
+            if self.name == candidate or self.name.startswith(f"{candidate}_"):
+                family = candidate
                 break
         env_name = f"BENCH_{family.upper()}_PYTHON"
         return os.environ.get(env_name) or sys.executable

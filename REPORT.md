@@ -130,6 +130,18 @@ Accuracy did not scale with cost. Adaptive consensus produced the best accuracy 
 
 Operationally, the run exposed Groq TPM pressure. Two intermediate rows hit HTTP 429 before the final result: a direct row with a 530-token request and a LangGraph critique row with a 1,338-token request. The adapter was updated so 429/5xx retries rotate keys on each retry and parse Groq's "try again in Xs" message when no `Retry-After` header is present. The final critique portion was resumed at `concurrency=1`, which completed without errors.
 
+### Next Architecture: Selective Critique
+
+The next topology is `selective_critique`, implemented for all three frameworks. It keeps adaptive consensus as the first gate, then runs critique only when the two solvers disagree:
+
+1. Solver A and Solver B answer independently.
+2. If their parsed answers match, return consensus immediately.
+3. If they disagree, run Critic A and Critic B as cross-critiques.
+4. If both critics converge on the same parsed answer, return critic consensus.
+5. Otherwise, call a final judge with the original prompt, solver outputs, and critique outputs.
+
+This design directly addresses the critique run's failure mode. Full critique changed many answers, but its gains and losses nearly canceled out: it fixed 17 direct-wrong questions and broke 16 direct-correct questions. Selective critique should avoid touching the 189/200 solver-consensus cases observed in adaptive consensus, while adding extra review only to the 11/200 disagreement cases where the simple judge was weakest.
+
 Primary shuffled sample, `N=8` per runner:
 
 | Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |

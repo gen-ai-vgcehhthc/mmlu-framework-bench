@@ -37,13 +37,29 @@ def judge_prompt(prompt: str, answer_a: str, answer_b: str) -> str:
 
 
 def adaptive_consensus_answer(answer_a: str, answer_b: str) -> str | None:
+    return consensus_answer(
+        answer_a,
+        answer_b,
+        "both independent solvers selected the same option.",
+    )
+
+
+def critique_consensus_answer(critique_a: str, critique_b: str) -> str | None:
+    return consensus_answer(
+        critique_a,
+        critique_b,
+        "both critique agents converged on the same revised option.",
+    )
+
+
+def consensus_answer(answer_a: str, answer_b: str, reason: str) -> str | None:
     parsed_a = parse_answer(answer_a)
     parsed_b = parse_answer(answer_b)
     if parsed_a and parsed_a == parsed_b:
         return "\n".join(
             [
                 f"Answer: {parsed_a}",
-                "Consensus: both independent solvers selected the same option.",
+                f"Consensus: {reason}",
             ]
         )
     return None

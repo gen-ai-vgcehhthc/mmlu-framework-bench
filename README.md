@@ -158,6 +158,7 @@ python -m bench.rescore results/mmlu-pro-debate50-seed42.jsonl `
 - `maf` wraps the same model call in Microsoft Agent Framework functional workflow.
 - `langgraph_adaptive_consensus_debate`, `crewai_adaptive_consensus_debate`, and `maf_adaptive_consensus_debate` run two independent solvers first. If both parse to the same answer, the runner records a `consensus` trace step and skips the judge call; otherwise it calls a judge.
 - `langgraph_critique`, `crewai_critique`, and `maf_critique` add a critique topology: two solvers, two cross-critiques, then one judge.
+- `langgraph_selective_critique`, `crewai_selective_critique`, and `maf_selective_critique` run critique only when the two solvers disagree. If critics converge, the judge is skipped; otherwise a final judge sees the solvers and critiques.
 - Multi-agent runners emit a `trace` array in JSONL results so solver, critic, and judge behavior can be inspected after the run.
 - The Docker image installs each framework in its own virtual environment because current CrewAI and MAF releases require incompatible OpenTelemetry versions.
 - Cost is marked unavailable for opencode CLI runs because the CLI output does not expose per-call token usage in a stable machine-readable format. Groq/Grok/OpenAI-compatible HTTP runs record provider token usage when the provider returns it.
