@@ -1,67 +1,53 @@
 # MMLU-Pro Agent Framework Comparison Report
 
-Date: 2026-05-25  
-Model backends: `opencode/deepseek-v4-flash-free` through `opencode run --pure`; Groq `llama-3.1-8b-instant` through OpenAI-compatible HTTP  
-Frameworks: LangGraph, CrewAI, Microsoft Agent Framework (MAF)  
+Date: 2026-05-26
 Dataset: `TIGER-Lab/MMLU-Pro`, `test` split
+Frameworks: LangGraph, CrewAI, Microsoft Agent Framework (MAF)
+Backends: opencode `deepseek-v4-flash-free`; Groq `llama-3.1-8b-instant`; exploratory mixed runs with Groq `llama-3.3-70b-versatile` and opencode DeepSeek
 
 ## Executive Summary
 
-For this experiment, the most important result is not accuracy. Because all frameworks share the same prompt and same model backend, accuracy should mostly match unless a framework integration changes output handling. The bigger differences are runtime overhead, dependency isolation, state/control ergonomics, and debugging surface.
+This MMLU-Pro experiment should be read as a reasoning orchestration benchmark, not as a general model leaderboard. MMLU-Pro is useful here because it removes external-tool and long-horizon workflow variables: every framework receives the same closed-book multiple-choice questions and the same answer format. That makes it a clean test of whether framework-orchestrated multi-agent discussion improves reasoning enough to justify extra calls, latency, cost, and failure surface.
 
-Recommendation:
+The main result is that framework choice did not materially change accuracy when the topology, prompt, and model were held constant. LangGraph, CrewAI, and MAF reached the same scores for the same Groq topologies. Their differences were mostly operational: latency, control-flow ergonomics, dependency isolation, observability, and ease of expressing stateful multi-agent patterns.
 
-- Use **LangGraph** when you need explicit control flow, deterministic state transitions, and graph-shaped multi-agent topology.
-- Use **CrewAI** when the problem is naturally role/task/team based and developer speed matters more than low-level orchestration control.
-- Use **MAF** when production workflow concerns matter: checkpointing, HITL, OpenTelemetry, Microsoft ecosystem, and Azure/Foundry/Copilot alignment.
-- Keep a **direct baseline** in every benchmark. It exposed framework overhead clearly and kept the model/provider noise honest.
+Adaptive consensus was the best same-model topology tested. On Groq `llama-3.1-8b-instant`, it improved direct accuracy from 35.5% to 37.5% at `N=200`, a net gain of 4 questions. Full critique was more expensive and weaker at 36.0%. Selective critique reduced critique cost dramatically but landed at 37.0%, slightly below adaptive consensus. The mixed-model runs are too small for a final claim, but they are the most promising direction for the MAF-specific hypothesis that agent discussion can improve reasoning.
 
-## Experiment Design
+Recommended reading:
 
-The harness builds the same MMLU-Pro prompt for every run and asks the model to return only `A` through `J`. Runners differ only in orchestration wrapper:
+- Use **LangGraph** when explicit deterministic graph control, checkpoints, and low-level state transitions matter most.
+- Use **CrewAI** when the workflow naturally maps to roles, tasks, and teams, and developer speed matters more than orchestration transparency.
+- Use **MAF** when production workflow concerns, HITL, OpenTelemetry, Azure/Foundry/Copilot alignment, and Microsoft ecosystem integration are central.
+- Keep a **direct baseline** in every benchmark. It prevents framework overhead from being mistaken for model improvement.
 
-- `direct`: calls the configured model backend directly.
-- `langgraph`: wraps the model call in a `StateGraph`.
-- `crewai`: wraps the model call in a CrewAI Flow.
-- `maf`: wraps the model call in a MAF functional workflow step.
+## Benchmark Question
 
-Docker is used without a devcontainer. Each framework is installed into its own virtual environment because the current CrewAI and MAF releases conflict on OpenTelemetry dependency versions.
+For the broader GAIA / tau-bench / MMLU-Pro benchmark report, MMLU-Pro answers this narrower question:
 
-Primary run:
+> Given the same model and same MMLU-Pro questions, do LangGraph, CrewAI, and MAF make it easier to implement multi-agent reasoning topologies that improve accuracy enough to justify their added runtime, cost, and debugging complexity?
 
-```powershell
-docker run --rm `
-  -v ${HOME}/.local/share/opencode/auth.json:/root/.local/share/opencode/auth.json:ro `
-  -v ${PWD}/results:/app/results `
-  mmlu-framework-bench `
-  --framework direct --framework langgraph --framework crewai --framework maf `
-  --limit 8 --shuffle --seed 42 --prewarm `
-  --output results/mmlu-pro-shuffle8-seed42.jsonl `
-  --summary results/mmlu-pro-shuffle8-seed42-summary.md
-```
+This is reasonable for MAF because the hypothesis is not that MAF itself makes the model smarter. The hypothesis is that MAF can express useful multi-agent workflows, such as independent solvers, consensus gates, critique, and role-routed model diversity. MMLU-Pro is a good first test for that because it measures closed-book reasoning without confounding tool use.
 
-The shuffled sample covered: math 2, engineering 2, physics 1, health 1, history 1, economics 1.
+## Experimental Setup
 
-## Quantitative Results
+The harness builds the same MMLU-Pro prompt for every run and asks the model to return only `A` through `J`. Docker is used without a devcontainer. Each framework is installed into its own virtual environment because current CrewAI and MAF releases have incompatible OpenTelemetry dependency requirements.
 
-### N=50 Reasoning Orchestration Matrix
+Tested runners:
 
-After the initial smoke runs, the main MMLU-Pro experiment was rerun with `N=50`, shuffled with `seed=42`, covering 14 categories: economics, engineering, business, physics, other, law, health, math, history, psychology, philosophy, computer science, biology, and chemistry.
+- `direct`: one raw model call, no agent framework.
+- `langgraph`, `crewai`, `maf`: one model call wrapped in each framework.
+- `*_adaptive_consensus_debate`: two independent solvers; if they agree, return consensus; otherwise call a judge.
+- `*_critique`: two solvers, two cross-critiques, then a judge on every question.
+- `*_selective_critique`: two solvers first; critique only runs when solvers disagree.
+- mixed-model selective critique: primary model handles default roles while `solver_b` and `critic_b` are routed to a secondary model.
 
-This completed run compares single-agent and the original two-solver-plus-judge debate pattern:
+All multi-agent runners record trace logs with role outputs, per-call latency, errors, and, for mixed-model runs, the concrete model used by each role.
 
-```powershell
-docker run --rm `
-  -v ${HOME}/.local/share/opencode/auth.json:/root/.local/share/opencode/auth.json:ro `
-  -v ${PWD}/results:/app/results `
-  mmlu-framework-bench `
-  --framework direct `
-  --framework langgraph --framework crewai --framework maf `
-  --framework langgraph_debate --framework crewai_debate --framework maf_debate `
-  --limit 50 --shuffle --seed 42 --resume `
-  --output results/mmlu-pro-debate50-seed42.jsonl `
-  --summary results/mmlu-pro-debate50-seed42-summary.md
-```
+## Final Results
+
+### DeepSeek Through Opencode, N=50
+
+The first complete run used opencode `deepseek-v4-flash-free`, shuffled with `seed=42`, across 50 MMLU-Pro questions. Timeout and blank-output rows from the first long run were retried. The final file has 350 rows: 7 runners x 50 questions, with 0 errors and 0 parse failures.
 
 | Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -73,43 +59,11 @@ docker run --rm `
 | CrewAI | debate | 50 | 80.0% | 0 | 0 | 46.96s | 37.59s | 99.43s |
 | MAF | debate | 50 | 84.0% | 0 | 0 | 22.99s | 15.22s | 77.25s |
 
-The timeout and blank-output rows from the first long run were removed and rerun. The final result file now has 350 rows: 7 runners x 50 questions, with 0 errors and 0 parse failures. All 150 debate rows include a `trace` array with solver A, solver B, and judge outputs, per-call latency, and per-call errors.
+This run does not support a claim that naive same-model debate improves MMLU-Pro reasoning. Debate increased latency and did not beat the strongest single-agent runs. Trace-aware parsing mattered because blank judge outputs sometimes hid usable solver outputs, but remaining blank rows were retried rather than inferred.
 
-After inspecting the trace logs, the result file was re-scored with trace-aware parsing. The final scoring used raw model output for 316 rows, solver consensus fallback for 24 rows, and single-solver fallback for 10 rows. Remaining blank rows were retried rather than inferred.
+### Groq 8B, N=200
 
-### Main Reading
-
-In this MMLU-Pro setup, the single-agent frameworks did not show consistent reasoning gains over direct calls. LangGraph single-agent scored highest at 90%, followed by MAF at 88%, direct at 84%, and CrewAI at 80%. Given `N=50` and non-deterministic free-provider calls, the main signal is not that one framework "reasons better"; it is that orchestration adds measurable latency and output-control surfaces.
-
-The debate topology did not produce a clear, framework-wide reasoning gain. LangGraph debate fell from 90% single-agent to 84%, CrewAI debate matched CrewAI single-agent at 80%, and MAF debate fell from 88% single-agent to 84%. The result does not support a claim that naive same-model debate reliably improves MMLU-Pro reasoning.
-
-The trace logs show why parse-aware evaluation matters: each debate example uses three model calls instead of one, so blank judge outputs can hide useful solver outputs. The corrected result should still be reported with the caveat that `solver_consensus` and `single_solver_fallback` are post-processing fallbacks, not native judge success. A critique topology has been added for follow-up runs to test whether explicit cross-examination is more useful than naive debate.
-
-After this run, the benchmark code was updated to replace the original `_debate` runners with `_adaptive_consensus_debate` runners. The new topology still starts with two independent solvers, but it skips the judge when both solvers parse to the same answer and records that short-circuit as a native `consensus` trace step. This converts part of the previous post-processing fallback into explicit framework behavior and reduces unnecessary provider calls.
-
-### N=200 Adaptive Consensus Follow-Up
-
-To test the revised topology at a larger sample size and lower cost, a second run used Groq `llama-3.1-8b-instant`, `N=200`, shuffled with `seed=42`, four Groq API keys, `max_tokens=64`, and adaptive consensus runners. The initial `concurrency=2` run hit Groq `HTTP 429` on fast runners, so failed rows were removed and resumed with `concurrency=1` plus HTTP retry/backoff. The final JSONL has 1,400 rows: 7 runners x 200 questions, with 0 errors and 0 parse failures.
-
-| Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| direct | single call | 200 | 35.5% | 0 | 0 | 0.31s | 0.27s | 0.48s |
-| LangGraph | single agent | 200 | 35.5% | 0 | 0 | 2.14s | 2.10s | 2.51s |
-| CrewAI | single agent | 200 | 35.5% | 0 | 0 | 7.59s | 7.59s | 10.52s |
-| MAF | single agent | 200 | 35.5% | 0 | 0 | 1.15s | 1.14s | 1.35s |
-| LangGraph | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 1.71s | 1.67s | 2.07s |
-| CrewAI | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 6.96s | 6.89s | 7.65s |
-| MAF | adaptive consensus debate | 200 | 37.5% | 0 | 0 | 2.46s | 3.16s | 3.61s |
-
-All three adaptive runners reached the same accuracy because they implement the same topology over the same model backend. The topology short-circuited through solver consensus on 189/200 questions and called the judge on only 11/200 questions, for about 2.06 model calls per question instead of the worst-case 3. This is useful for cost control.
-
-The accuracy gain over single-call baselines was only +2.0 percentage points, or 4 more correct answers out of 200. That is a useful direction for follow-up, but not strong evidence by itself that same-model discussion reliably improves reasoning. The larger signal is operational: adaptive consensus reduced judge calls and gave consistent behavior across frameworks, while latency still reflected framework overhead.
-
-For the overall three-benchmark report, MMLU-Pro should be framed as a **reasoning orchestration benchmark**: it tests whether frameworks can implement deliberation patterns cleanly, and whether those patterns improve closed-book QA accuracy enough to justify their extra calls, latency, and failure risk.
-
-### N=200 Critique and Token-Usage Follow-Up
-
-The final Groq follow-up reran `N=200` with the original seven runners plus the three critique runners. This run used six Groq keys from separate accounts, rebuilt Docker after adding provider usage capture, and recorded provider-reported `prompt_tokens`, `completion_tokens`, and `total_tokens` in every JSONL row and every traced solver/critic/judge call. The final result file has 2,000 rows: 10 runners x 200 questions, with 0 errors and 0 parse failures.
+The main larger run used Groq `llama-3.1-8b-instant`, shuffled with `seed=42`, with provider token usage recorded. The final JSONL has 2,000 rows: 10 runners x 200 questions, with 0 errors and 0 parse failures.
 
 | Framework | Pattern | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | Total Tokens |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -124,140 +78,100 @@ The final Groq follow-up reran `N=200` with the original seven runners plus the 
 | CrewAI | critique | 200 | 36.0% | 0 | 0 | 7.64s | 7.56s | 8.36s | 388,663 |
 | MAF | critique | 200 | 36.0% | 0 | 0 | 3.00s | 2.72s | 5.93s | 388,688 |
 
-The full run consumed 1,750,430 provider-reported tokens. The single-call runners each used 51,941 tokens. Adaptive consensus used about 125.5K tokens per framework, with 411 model calls: 200 solver A calls, 200 solver B calls, and only 11 judge calls because 189/200 questions reached solver consensus. Critique used about 388.7K tokens per framework and 1,000 model calls: two solvers, two critics, and one judge for every question.
+Accuracy did not scale with cost. Adaptive consensus produced the best same-model result at 37.5%, a net +4 correct answers over direct. Full critique reached only 36.0%, a net +1 over direct, while using roughly 7.5x the direct token count. Direct-to-critique transitions were nearly balanced: critique fixed 17 direct-wrong answers but broke 16 direct-correct answers.
 
-Accuracy did not scale with cost. Adaptive consensus produced the best accuracy at 37.5%, a net +4 correct answers over direct. Critique reached only 36.0%, a net +1 over direct. Direct-to-critique transitions were nearly balanced: critique fixed 17 direct-wrong answers but broke 16 direct-correct answers. The trace logs suggest the critique/judge stage often changed answers without a reliable signal that the change was better.
+The reason full critique underperformed is that same-model critique often changed answers without adding a reliable correctness signal. The judge received more text, but not necessarily more independent evidence. When all agents share the same model family, prompt, and blind spots, critique can amplify plausible but wrong rationales. Adaptive consensus worked better because it only spent an extra judge call on disagreement cases and avoided perturbing the many cases where both solvers already matched.
 
-Operationally, the run exposed Groq TPM pressure. Two intermediate rows hit HTTP 429 before the final result: a direct row with a 530-token request and a LangGraph critique row with a 1,338-token request. The adapter was updated so 429/5xx retries rotate keys on each retry and parse Groq's "try again in Xs" message when no `Retry-After` header is present. The final critique portion was resumed at `concurrency=1`, which completed without errors.
+### Selective Critique, N=200
 
-### Next Architecture: Selective Critique
+Selective critique was added to address full critique's failure mode. It keeps adaptive consensus as the first gate, then runs cross-critique only when the two solvers disagree. This run used Groq `llama-3.1-8b-instant`, `N=200`, and all three frameworks. The final file has 600 rows with 0 errors and 0 parse failures.
 
-The next topology is `selective_critique`, implemented for all three frameworks. It keeps adaptive consensus as the first gate, then runs critique only when the two solvers disagree:
+| Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | Total Tokens |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| LangGraph selective critique | 200 | 37.0% | 0 | 0 | 2.38s | 1.80s | 4.76s | 136,112 |
+| CrewAI selective critique | 200 | 37.0% | 0 | 0 | 7.07s | 6.92s | 8.03s | 135,001 |
+| MAF selective critique | 200 | 37.0% | 0 | 0 | 1.73s | 1.16s | 4.48s | 135,001 |
 
-1. Solver A and Solver B answer independently.
-2. If their parsed answers match, return consensus immediately.
-3. If they disagree, run Critic A and Critic B as cross-critiques.
-4. If both critics converge on the same parsed answer, return critic consensus.
-5. Otherwise, call a final judge with the original prompt, solver outputs, and critique outputs.
+Selective critique was cheaper than full critique, about 135K tokens per framework instead of 388K, but it did not beat adaptive consensus. It reached 37.0%, or +3 correct answers over direct, while adaptive consensus reached +4. The topology behaved as designed: roughly 190/200 examples short-circuited through solver consensus, and only 10/200 reached critique.
 
-This design directly addresses the critique run's failure mode. Full critique changed many answers, but its gains and losses nearly canceled out: it fixed 17 direct-wrong questions and broke 16 direct-correct questions. Selective critique should avoid touching the 189/200 solver-consensus cases observed in adaptive consensus, while adding extra review only to the 11/200 disagreement cases where the simple judge was weakest.
+### Mixed-Model Exploratory Runs
 
-The harness now also supports role-routed mixed-model runs through `--secondary-backend`, `--secondary-model`, and `--secondary-roles`. The first mixed-model experiments should keep the cheap model on Solver A and judge, then route Solver B and Critic B to a different model. This keeps cost bounded while testing whether model heterogeneity helps the disagreement cases that same-model critique struggled to resolve.
+The harness now supports role-routed mixed-model runs through `--secondary-backend`, `--secondary-model`, and `--secondary-roles`. The first tests kept Groq `llama-3.1-8b-instant` as the primary model and routed `solver_b` and `critic_b` to a secondary model.
 
-### Selective Critique and Mixed-Model Results
+| Mixed Run | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Total Tokens |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Groq 8B primary + Groq 70B secondary | MAF selective critique | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
+| Groq 8B primary + opencode DeepSeek secondary | MAF selective critique | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
 
-The selective critique topology was run at `N=200` on Groq `llama-3.1-8b-instant` for all three frameworks. The final result file has 600 rows with 0 errors and 0 parse failures.
-
-| Framework | N | Accuracy | Avg Latency | Median | P95 | Total Tokens |
-|---|---:|---:|---:|---:|---:|---:|
-| LangGraph selective critique | 200 | 37.0% | 2.38s | 1.80s | 4.76s | 136,112 |
-| CrewAI selective critique | 200 | 37.0% | 7.07s | 6.92s | 8.03s | 135,001 |
-| MAF selective critique | 200 | 37.0% | 1.73s | 1.16s | 4.48s | 135,001 |
-
-Selective critique was slightly worse than adaptive consensus in this run: 37.0% versus 37.5%. It still beat direct by +3 correct answers out of 200, but adaptive consensus beat direct by +4. The topology behaved as designed: about 190/200 examples short-circuited through solver consensus, and only 10/200 went to critique. This made it far cheaper than full critique: about 135K tokens per framework versus 388K.
-
-Mixed-model smoke tests were then run with MAF selective critique:
-
-| Mixed Run | N | Accuracy | Errors | Parse Failures | Avg Latency | Total Tokens |
-|---|---:|---:|---:|---:|---:|---:|
-| Groq 8B primary + Groq 70B secondary | 20 | 60.0% | 0 | 0 | 2.07s | 32,762 |
-| Groq 8B primary + opencode DeepSeek secondary | 10 | 70.0% | 0 | 0 | 15.75s | 10,249 Groq-reported tokens |
-
-These mixed-model samples are exploratory only. They are promising enough to justify a larger run, but not large enough to claim a stable accuracy gain. The Groq 70B secondary is easier to measure and much faster than opencode, while the opencode mix gives stronger model diversity at the cost of much higher latency and incomplete token accounting.
-
-Primary shuffled sample, `N=8` per runner:
-
-| Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
-|---|---:|---:|---:|---:|---:|---:|
-| direct | 87.5% | 0 | 0 | 8.83s | 7.24s | 16.53s |
-| LangGraph | 87.5% | 0 | 0 | 10.88s | 9.64s | 17.86s |
-| CrewAI | 87.5% | 0 | 0 | 12.96s | 11.57s | 18.30s |
-| MAF | 87.5% | 0 | 0 | 8.58s | 7.84s | 12.10s |
-
-All frameworks missed the same physics question, so accuracy differences were not meaningful in this small shuffled run. Runtime overhead was more informative:
-
-- MAF was closest to direct in this run, slightly faster on average due normal provider variance.
-- LangGraph added modest overhead from worker/graph wrapping.
-- CrewAI had the largest overhead, likely from Flow initialization and framework runtime setup.
-
-Sequential first-10 run, not representative because it was all business questions:
-
-| Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
-|---|---:|---:|---:|---:|---:|---:|
-| direct | 90.0% | 0 | 0 | 6.84s | 5.61s | 12.33s |
-| LangGraph | 70.0% | 0 | 2 | 9.50s | 7.31s | 20.75s |
-| CrewAI | 70.0% | 0 | 2 | 12.04s | 10.59s | 18.69s |
-| MAF | 80.0% | 0 | 0 | 8.80s | 6.31s | 19.88s |
-
-Concurrency smoke run, `limit=6`, `concurrency=2`, all business:
-
-| Framework | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 |
-|---|---:|---:|---:|---:|---:|---:|
-| direct | 83.3% | 0 | 0 | 7.86s | 6.60s | 12.90s |
-| LangGraph | 83.3% | 0 | 0 | 11.40s | 7.41s | 21.31s |
-| CrewAI | 66.7% | 0 | 0 | 12.34s | 12.06s | 13.83s |
-| MAF | 66.7% | 0 | 1 | 12.62s | 6.79s | 28.19s |
+These samples are exploratory only and should not be reported as stable accuracy gains. They are useful because they test the more plausible version of the multi-agent reasoning hypothesis: disagreement between different models may provide more signal than debate among copies of the same weak model. The Groq 70B mix is faster and has complete token accounting. The opencode mix gives stronger model diversity but is much slower and does not expose full token usage.
 
 ## Metric-by-Metric Analysis
 
 ### Runtime & Efficiency
 
-Direct remained the best latency baseline. Among frameworks, MAF and LangGraph were lighter than CrewAI for this single-call workflow. CrewAI's Flow abstraction is pleasant, but for a tiny benchmark node it carries visible startup overhead.
+Direct calls are the latency and cost baseline. Single-agent framework wrappers did not change token usage because they send the same prompt to the same model, but they did add orchestration overhead. In the Groq N=200 run, CrewAI had the largest runtime overhead, LangGraph was moderate, and MAF was generally the lightest framework wrapper.
 
-Cost control could not be measured directly because opencode CLI did not expose stable per-call token/cost metadata. The benchmark records latency, errors, parse failures, and raw output; cost hooks should be added when using a provider SDK with token usage.
+For multi-agent topologies, token cost was driven by model-call count. Direct used about 52K tokens per 200-question run. Adaptive consensus used about 125.5K tokens because it called the judge only 11 times. Full critique used about 388.7K tokens because it always ran two solvers, two critics, and a judge.
 
-Parallelism was limited by the free opencode backend and CLI subprocess model. LangGraph and MAF have clearer native parallel workflow stories than CrewAI for deterministic fan-out/fan-in, but this harness intentionally kept provider pressure low.
+### Parallel Processing
 
-### Control & State Management
+Framework capability and provider limits should be separated. LangGraph and MAF both express deterministic fan-out/fan-in cleanly, and MAF's async workflow style made concurrent solver calls straightforward. CrewAI can express collaborative flows, but its higher-level runtime is heavier for a micro-benchmark. In practice, Groq TPM limits and opencode CLI behavior constrained concurrency more than the frameworks did.
 
-LangGraph gives the strongest low-level control: explicit nodes, edges, state schema, and checkpoint/store ecosystem. It is the best fit when correctness depends on knowing exactly what happens next.
+### Control Flow & Determinism
 
-CrewAI is optimized for role/task mental models. It is better for "team of agents" product workflows than for a deterministic benchmark harness.
+LangGraph provides the clearest graph-level control with explicit nodes, edges, and state. MAF provides a clean workflow-step model with production-oriented checkpoint and HITL concepts. CrewAI is less ideal when every edge and state transition must be audited, but it is ergonomic when the problem naturally maps to role/task collaboration.
 
-MAF sits closer to production workflow infrastructure: `@workflow`, `@step`, checkpointing, and HITL concepts are central. Its functional workflow API is clean, but newer and more likely to shift.
+The benchmark confirms that deterministic topology design matters more than the framework label. When all three frameworks implemented the same adaptive or selective topology, they produced the same accuracy.
 
-### Developer Experience & Debugging
+### State & Memory
 
-Observed setup friction:
+MMLU-Pro does not stress long-term memory. It does, however, stress short-lived state: solver answers, parsed labels, critique text, judge decisions, and fallback traces. LangGraph makes this state most explicit. MAF's workflow model is also a good fit. CrewAI is convenient, but more framework behavior is hidden behind the flow abstraction.
 
-- CrewAI and MAF could not be installed together in one Python environment because of incompatible OpenTelemetry requirements.
+### Observability & Debugging
+
+Trace logging was essential. It exposed blank judge outputs, parse failures, solver consensus, critique behavior, and mixed-model role routing. The harness now records trace arrays for multi-agent runs and token usage for OpenAI-compatible HTTP responses.
+
+Setup friction was also informative:
+
+- CrewAI and MAF required separate virtual environments because of OpenTelemetry dependency conflicts.
 - CrewAI wrote framework output to stdout, so the worker had to redirect stdout while emitting JSON.
-- MAF returned workflow events rather than only final text, so the runner had to extract the final `output` event.
-- opencode first-run database migration logs can pollute raw model output; the harness now supports `--prewarm` and cleans migration lines.
+- MAF returned workflow events rather than only final text, so the runner had to extract final output events.
+- opencode first-run migration logs and occasional empty outputs required prewarm, cleaning, retries, and explicit timeout handling.
 
-This is a real-world differentiator: frameworks with richer observability often emit more runtime surface area, which helps debugging but complicates benchmarking and automation.
+### Tool Calling and Human Approval
 
-### External Interaction
+MMLU-Pro does not exercise tool use or human approval, so this benchmark should not be used to rank those features directly. Based on framework design:
 
-Tool calling:
+- LangGraph has strong tool-node, interrupt, checkpoint, and LangSmith observability patterns.
+- CrewAI has a natural agent/task/tool vocabulary and human-feedback workflow features.
+- MAF has agent skills/tools, HITL workflow context, OpenTelemetry, and Microsoft ecosystem alignment.
 
-- LangGraph benefits from the LangChain tool ecosystem and explicit tool nodes.
-- CrewAI has tools as a core agent/task concept.
-- MAF has agent skills/tools and is aligned with Microsoft provider integrations.
+These capabilities should be evaluated in GAIA and tau-bench rather than inferred from MMLU-Pro.
 
-Human approval:
+### Ecosystem & Commercial Landing
 
-- LangGraph supports interrupt/checkpoint style approval flows.
-- CrewAI has human feedback features in Flows and task patterns.
-- MAF exposes HITL through workflow context patterns.
+LangGraph has the strongest graph-control ecosystem and LangSmith path. CrewAI has the simplest collaboration vocabulary and a fast-moving platform. MAF has the clearest Microsoft enterprise path, especially for Azure, Foundry, GitHub Copilot, workflow checkpointing, and OpenTelemetry-centered production monitoring.
 
-### Ecosystem & Business Landing
+## Timeout and Rate-Limit Notes
 
-LangGraph has the strongest graph-control ecosystem and LangSmith observability path. CrewAI has a fast-moving platform and a simple collaboration vocabulary. MAF has the clearest Microsoft enterprise path, including Azure/Foundry/GitHub Copilot alignment.
+The timeout issues came from backend and orchestration interaction, not from MMLU-Pro itself. opencode can return empty output or take longer through the CLI, especially around first-run setup and provider latency. Groq introduced rate limits through TPM/HTTP 429 pressure when concurrent runners made many fast requests. The final runs used retries, key rotation, provider backoff parsing, row-level resume, and lower concurrency where needed.
+
+The latest opencode health retry completed with 0 errors and 0 parse failures. It is usable, but for long runs the safer configuration is `--parse-retries 2`, `--timeout 180`, and conservative concurrency.
 
 ## Limitations
 
-This is a small, free-provider experiment, not a publishable model benchmark. The full MMLU-Pro split has 12,032 test examples; running all frameworks across the full split would require much more quota and time. The report should be read as an integration and orchestration comparison, not a claim about the model's MMLU-Pro score.
+This is not a publishable model benchmark. The full MMLU-Pro test split has 12,032 examples, while the main framework comparison used shuffled samples of 50 and 200. Free or low-cost providers introduce non-determinism, quota pressure, and retry artifacts.
 
-The opencode CLI backend is practical and cheap, but it hides token usage and introduces CLI/database startup behavior. The harness now also supports OpenAI-compatible HTTP backends, including xAI Grok (`--backend grok`) and Groq (`--backend groq`). For a stronger cost study, record token usage from those provider responses.
+Accuracy should be interpreted carefully. With the same model and topology, the frameworks should usually produce the same answers; any accuracy difference can come from provider variance, parse handling, or orchestration side effects. The stronger conclusion is about framework control, cost, latency, traceability, and how cleanly each framework expresses multi-agent reasoning patterns.
 
-## Next Steps
+## Recommendations
 
-1. Add token usage and price extraction for OpenAI-compatible provider responses.
-2. Add stratified sampling by category instead of pure shuffle.
-3. Run critique topology at `N=50` or `N=100` before trying `N=200`.
-4. Add native tool-call and HITL test cases beyond MMLU-Pro.
-5. Add observability screenshots/traces for each framework.
+1. For the combined GAIA / tau-bench / MMLU-Pro report, frame MMLU-Pro as the closed-book reasoning and orchestration slice.
+2. Use adaptive consensus as the same-model baseline. It was the best cost/accuracy tradeoff tested.
+3. Treat full critique as currently unjustified for weak same-model runs because it adds cost and can break correct answers.
+4. Continue mixed-model selective critique with a larger sample, ideally `N=100` or `N=200`, before making an accuracy claim.
+5. Use GAIA and tau-bench to evaluate tool calling, long-horizon state, human approval, and workflow realism.
+6. Keep direct runs in every experiment and always report token usage, parse failures, timeout/error counts, and trace availability.
 
 ## References
 
