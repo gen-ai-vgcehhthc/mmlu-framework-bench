@@ -102,7 +102,7 @@ Initial results:
 | MAF selective, Groq 8B + opencode DeepSeek | 100 | 80.0% | 0 | 0 | 27.65s | 93,311 Groq-reported tokens |
 | MAF selective, Groq 8B + opencode DeepSeek | 200 | 81.5% | 0 | 0 | 25.83s | 187,217 Groq-reported tokens |
 | MAF selective, opencode DeepSeek + Groq 8B | 100 | 85.0% | 0 | 0 | 27.29s | 59,295 Groq-reported tokens |
-| MAF selective, opencode DeepSeek + Groq 8B | 200 | 82.0% raw / 85.5% trace-recovered | 10 | 0 | 27.55s | 118,564 Groq-reported tokens |
+| MAF selective, opencode DeepSeek + Groq 8B | 200 | 83.5% raw / 85.0% trace-recovered | 7 | 0 | 27.34s | 120,067 Groq-reported tokens |
 
 The Groq-only mixed runs show that stronger models help, but not enough to explain the opencode result. `70B+70B` reached 53.5%, and the two 70B solvers agreed on 186/200 questions, so same-model deliberation still added limited independent signal. `70B+8B` reached 56.0%, while the reverse `8B+70B` reached 49.5%, suggesting the stronger model is more useful as primary/judge than as a secondary dissenter. The reverse run also had a large latency tail, with p95 at 124.37s.
 
@@ -110,7 +110,7 @@ The `N=200` mixed opencode result is much stronger than same-model debate, but i
 
 One caveat: 1/200 opencode traces contained an Exa Web Search marker. Excluding that row gives 162/199 = 81.4%, so the aggregate conclusion is unchanged, but the result should be labeled as opencode-backed mixed-model orchestration rather than strictly closed-book reasoning.
 
-The reverse opencode-primary run is a useful stability check. It reached 85.0% at `N=100` with 0 errors. At `N=200`, retrying previous timeout rows reduced remaining errors to 10, and those errors came from the Groq secondary (`organization_restricted`/blocked), not opencode. Trace fallback recovered 7 of the 10 rows from opencode solver output, giving 85.5% trace-recovered accuracy. This is promising, but operationally less clean than Groq-primary routing because opencode now handles solver A and judge calls.
+The reverse opencode-primary run is a useful stability check. It reached 85.0% at `N=100` with 0 errors. At `N=200`, retrying previous timeout rows reduced remaining errors to 7, and those errors came from the Groq secondary (`organization_restricted`/blocked), not opencode. Trace fallback recovered 4 of the 7 rows from opencode solver output, giving 85.0% trace-recovered accuracy. This is promising, but operationally less clean than Groq-primary routing because opencode now handles solver A and judge calls, and the mixed setup remains sensitive to secondary provider availability.
 
 ## Trace Note
 
