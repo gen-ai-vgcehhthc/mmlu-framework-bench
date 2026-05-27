@@ -2,7 +2,7 @@
 
 | Framework | N | Accuracy | Errors | Parse Failures | Avg Latency | Median | P95 | Prompt Tokens | Completion Tokens | Total Tokens |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| maf_selective_critique | 200 | 83.5% | 7 | 0 | 27.34s | 20.15s | 74.76s | 108,501 | 11,566 | 120,067 |
+| maf_selective_critique | 200 | 86.5% | 0 | 0 | 27.67s | 20.70s | 74.76s | 110,872 | 11,947 | 122,819 |
 
 ## Framework Scorecard
 
